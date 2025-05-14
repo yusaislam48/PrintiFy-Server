@@ -213,7 +213,27 @@ export const authAPI = {
   // Logout user
   logout: () => {
     removeToken();
-  }
+  },
+
+  // Change password
+  changePassword: async (passwordData) => {
+    try {
+      const response = await api.post('/auth/change-password', passwordData);
+      return response.data;
+    } catch (error) {
+      throw error.response?.data || { message: 'Failed to change password' };
+    }
+  },
+
+  // Reset password
+  resetPassword: async (resetData) => {
+    try {
+      const response = await api.post('/auth/reset-password', resetData);
+      return response.data;
+    } catch (error) {
+      throw error.response?.data || { message: 'Failed to reset password' };
+    }
+  },
 };
 
 // User API calls

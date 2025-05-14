@@ -172,6 +172,19 @@ const Login = () => {
             }}
           />
           
+          <Box sx={{ display: 'flex', justifyContent: 'flex-end', mt: -2 }}>
+            <Link
+              component="button"
+              type="button"
+              variant="body2"
+              onClick={() => navigate('/forgot-password')}
+              underline="hover"
+              sx={{ fontSize: '0.875rem' }}
+            >
+              Forgot password?
+            </Link>
+          </Box>
+          
           <Button
             type="submit"
             variant="contained"

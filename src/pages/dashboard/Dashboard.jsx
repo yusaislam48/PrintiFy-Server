@@ -50,9 +50,11 @@ import {
   FileDownload as FileDownloadIcon,
   OpenInNew as OpenInNewIcon,
   Preview as PreviewIcon,
+  Lock as LockIcon,
 } from '@mui/icons-material';
 import { authAPI, printAPI } from '../../utils/api';
 import PDFUpload from '../../components/PDFUpload';
+import ChangePassword from '../../components/ChangePassword';
 import axios from 'axios';
 
 // TabPanel component for tab content
@@ -440,6 +442,12 @@ const Dashboard = () => {
               </ListItemIcon>
               <ListItemText primary="Profile" />
             </ListItem>
+            <ListItem button selected={tabValue === 3} onClick={() => setTabValue(3)}>
+              <ListItemIcon>
+                <LockIcon />
+              </ListItemIcon>
+              <ListItemText primary="Change Password" />
+            </ListItem>
             <ListItem button>
               <ListItemIcon>
                 <SettingsIcon />
@@ -475,6 +483,7 @@ const Dashboard = () => {
               <Tab icon={<DashboardIcon />} label="Dashboard" />
               <Tab icon={<FileUploadIcon />} label="Upload PDF" />
               <Tab icon={<PrintIcon />} label="Print Jobs" />
+              <Tab icon={<LockIcon />} label="Password" />
               <Tab icon={<HistoryIcon />} label="History" />
             </Tabs>
           </Box>
@@ -790,6 +799,16 @@ const Dashboard = () => {
                   )}
                 </Box>
               )}
+            </Paper>
+          </TabPanel>
+          
+          {/* Change Password Tab */}
+          <TabPanel value={tabValue} index={3}>
+            <Paper sx={{ p: 3 }}>
+              <Typography variant="h4" sx={{ mb: 3 }}>
+                Change Password
+              </Typography>
+              <ChangePassword />
             </Paper>
           </TabPanel>
         </Box>
