@@ -201,87 +201,66 @@ exports.verifyEmail = async (req, res) => {
       const inputNum = parseInt(inputCode, 10);
       const storedNum = parseInt(storedCode, 10);
       
-      if (!isNaN(inputNum) && !isNaN(storedNum) && inputNum === storedNum) {
-        return true;
+      if (!isNaN(inputNum) && !isNaN(storedNum)) {
+        return inputNum === storedNum;
       }
       
       return false;
     };
 
-    // Check if verification code is valid using the robust comparison
-    const isValidCode = compareVerificationCodes(inputCode, storedCode);
-    console.log('Code validation result:', isValidCode);
-    
-    if (!isValidCode) {
+    // Check if verification code is valid and not expired
+    if (!compareVerificationCodes(inputCode, storedCode)) {
       console.log('Invalid verification code');
       return res.status(400).json({ message: 'Invalid verification code' });
     }
 
-    // SKIP expiration check since there might be timezone issues
-    // We're validating the verification code itself, which is more important
-    console.log('Skipping expiration check due to potential timezone differences');
+    if (pendingUser.verificationCodeExpires < new Date()) {
+      console.log('Verification code expired');
+      return res.status(400).json({ message: 'Verification code has expired' });
+    }
 
-    // Create verified user from pending user data
-    console.log('Creating verified user from pending user data');
-    
-    // Log the password details before transfer
-    console.log('Password details for transfer:', {
-      pendingPasswordExists: !!pendingUserWithPassword.password,
-      pendingPasswordLength: pendingUserWithPassword.password?.length,
-      passwordType: typeof pendingUserWithPassword.password,
-      isBcryptHash: pendingUserWithPassword.password?.startsWith('$2')
+    // Create a new verified user
+    const newUser = new User({
+      name: pendingUser.name,
+      email: pendingUser.email,
+      password: pendingUserWithPassword.password, // Use the hashed password
+      studentId: pendingUser.studentId,
+      phone: pendingUser.phone,
+      points: pendingUser.points || 10, // Transfer points or default to 10
+      isVerified: true
     });
-    
-    // Create the user document without saving it yet
-    const verifiedUser = new User({
-      name: pendingUserWithPassword.name,
-      email: pendingUserWithPassword.email,
-      studentId: pendingUserWithPassword.studentId,
-      phone: pendingUserWithPassword.phone,
-      isVerified: true,
-      role: 'user'
-    });
-    
-    // Set the password directly to avoid double hashing
-    // The pendingUser.password is already hashed
-    verifiedUser.password = pendingUserWithPassword.password;
-    
-    // Disable the pre-save password hashing for this save operation
-    verifiedUser.$skipPasswordHashing = true;
-    
-    // Save the user
-    await verifiedUser.save();
-    
-    // Verify the password was transferred correctly
-    const savedUser = await User.findById(verifiedUser._id).select('+password');
-    console.log('Password transfer verification:', {
-      originalPasswordLength: pendingUserWithPassword.password?.length,
-      savedPasswordLength: savedUser.password?.length,
-      passwordsMatch: savedUser.password === pendingUserWithPassword.password
-    });
+
+    // Skip password hashing since we're using the already hashed password
+    newUser.$skipPasswordHashing = true;
+
+    // Save the new user
+    await newUser.save();
+    console.log('New verified user created:', newUser._id);
 
     // Delete the pending user
-    await PendingUser.deleteOne({ _id: pendingUser._id });
-    console.log('Pending user deleted');
+    await PendingUser.findByIdAndDelete(pendingUser._id);
+    console.log('Pending user deleted:', pendingUser._id);
 
-    // Generate tokens for the verified user
-    const token = generateToken(verifiedUser);
-    const refreshToken = generateRefreshToken(verifiedUser);
+    // Generate tokens
+    const token = generateToken(newUser);
+    const refreshToken = generateRefreshToken(newUser);
 
-    // Respond with user data and tokens
-    console.log('Verification successful, sending response');
-    res.json({
-      _id: verifiedUser._id,
-      name: verifiedUser.name,
-      email: verifiedUser.email,
-      role: verifiedUser.role,
+    // Return success response with tokens
+    res.status(200).json({
+      message: 'Email verified successfully',
       token,
       refreshToken,
-      message: 'Email verified successfully'
+      user: {
+        id: newUser._id,
+        name: newUser.name,
+        email: newUser.email,
+        role: newUser.role,
+        points: newUser.points
+      }
     });
   } catch (error) {
-    console.error('Verification error details:', error);
-    res.status(500).json({ message: 'Verification failed', error: error.message });
+    console.error('Email verification error:', error);
+    res.status(500).json({ message: 'Email verification failed', error: error.message });
   }
 };
 

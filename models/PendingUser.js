@@ -41,6 +41,10 @@ const pendingUserSchema = new mongoose.Schema({
     required: [true, 'Please provide a password'],
     minlength: [6, 'Password must be at least 6 characters']
   },
+  points: {
+    type: Number,
+    default: 10
+  },
   verificationCode: {
     type: String,
     required: true,

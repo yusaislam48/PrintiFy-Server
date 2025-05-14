@@ -22,6 +22,10 @@ const printJobSchema = new mongoose.Schema({
     type: String,
     required: true
   },
+  pointsUsed: {
+    type: Number,
+    default: 0
+  },
   printSettings: {
     copies: {
       type: Number,

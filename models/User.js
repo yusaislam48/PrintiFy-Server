@@ -49,6 +49,10 @@ const userSchema = new mongoose.Schema({
     enum: ['user', 'admin'],
     default: 'user'
   },
+  points: {
+    type: Number,
+    default: 0
+  },
   isVerified: {
     type: Boolean,
     default: false

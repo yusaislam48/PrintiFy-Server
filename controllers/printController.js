@@ -48,6 +48,9 @@ exports.uploadPDF = async (req, res) => {
     };
 
     console.log('Print job with total pages:', printSettings.totalPages);
+    
+    // Calculate points needed for this job - 1 point per page
+    const pointsNeeded = printSettings.totalPages > 0 ? printSettings.totalPages : 1;
 
     // Create a new print job in database
     const printJob = new PrintJob({
@@ -56,6 +59,7 @@ exports.uploadPDF = async (req, res) => {
       fileUrl: directUrl,
       proxyUrl: proxyUrl,
       cloudinaryPublicId: result.public_id,
+      pointsUsed: pointsNeeded,
       printSettings,
       status: 'pending'
     });
@@ -76,7 +80,8 @@ exports.uploadPDF = async (req, res) => {
         proxyUrl: proxyUrl,
         status: printJob.status,
         createdAt: printJob.createdAt,
-        printSettings: printJob.printSettings
+        printSettings: printJob.printSettings,
+        pointsUsed: printJob.pointsUsed
       }
     });
   } catch (error) {
@@ -267,109 +272,117 @@ exports.viewPDF = async (req, res) => {
 exports.findPrintJobsByStudentId = async (req, res) => {
   try {
     const { studentId } = req.params;
+    const User = require('../models/User'); // Import User model
     
     if (!studentId || studentId.length !== 7) {
-      return res.status(400).json({ message: 'Valid student ID is required (7 digits)' });
+      return res.status(400).json({ message: 'Invalid student ID format' });
     }
     
-    console.log(`Finding print jobs for student ID: ${studentId}`);
-    
-    // Find the user with this student ID first
-    const user = await require('../models/User').findOne({ studentId });
+    // Find the user by student ID
+    const user = await User.findOne({ studentId });
     
     if (!user) {
-      console.log(`No user found with student ID: ${studentId}`);
       return res.status(404).json({ message: 'No user found with this student ID' });
     }
     
-    console.log(`Found user: ${user.name}, ID: ${user._id}`);
-    
-    // Find all pending print jobs for this user
+    // Find pending print jobs for this user
     const pendingPrintJobs = await PrintJob.find({ 
       userId: user._id,
-      status: 'pending'
+      status: { $in: ['pending', 'processing'] }
     }).sort({ createdAt: -1 });
     
-    // Log job details for debugging
-    console.log(`Found ${pendingPrintJobs.length} pending jobs for student ${studentId}`);
-    
-    const updatedJobs = [];
-    
-    // Process each job to ensure it has the correct URLs
-    for (const job of pendingPrintJobs) {
-      const jobObj = job.toObject();
+    // Generate fresh URLs for each job
+    const jobsWithUrls = pendingPrintJobs.map(job => {
+      const directUrl = getSignedUrl(job.cloudinaryPublicId);
+      const proxyUrl = getProxyUrl(job.cloudinaryPublicId);
       
-      // Log job details
-      console.log(`Processing job: ${job._id}, filename: ${job.fileName}`);
-      
-      if (job.cloudinaryPublicId) {
-        console.log(`Job has cloudinaryPublicId: ${job.cloudinaryPublicId}`);
-        
-        // Extract the filename part from cloudinaryPublicId
-        const publicIdPath = job.cloudinaryPublicId.replace('printify/pdfs/', '');
-        console.log(`Extracted public ID path: ${publicIdPath}`);
-        
-        // Generate a proxy URL for the PDF - remove .pdf extension if it exists
-        const cleanedPath = publicIdPath.endsWith('.pdf') 
-          ? publicIdPath 
-          : `${publicIdPath}.pdf`;
-          
-        const proxyUrl = `/pdf-proxy/${process.env.CLOUDINARY_CLOUD_NAME}/raw/upload/${cleanedPath}`;
-        console.log(`Generated proxy URL: ${proxyUrl}`);
-        
-        // Add the proxy URL to the job object
-        jobObj.proxyUrl = proxyUrl;
-      } else {
-        console.warn(`Job ${job._id} missing cloudinaryPublicId`);
-      }
-      
-      updatedJobs.push(jobObj);
-    }
+      return {
+        ...job.toObject(),
+        fileUrl: directUrl,
+        proxyUrl: proxyUrl,
+        cloudinaryPublicId: undefined
+      };
+    });
     
     return res.status(200).json({ 
       studentName: user.name,
-      pendingPrintJobs: updatedJobs
+      userPoints: user.points || 0, // Include user points in the response
+      pendingPrintJobs: jobsWithUrls
     });
   } catch (error) {
     console.error('Error finding print jobs by student ID:', error);
-    return res.status(500).json({ message: 'Failed to find print jobs', error: error.message });
+    return res.status(500).json({ 
+      message: 'Failed to find print jobs', 
+      error: error.message 
+    });
   }
 };
 
-// Mark a print job as completed (public endpoint - no auth required)
+// Mark a print job as completed and deduct points
 exports.markPrintJobAsCompleted = async (req, res) => {
   try {
     const { jobId } = req.params;
+    const User = require('../models/User'); // Import User model
     
     // Find the print job
     const printJob = await PrintJob.findById(jobId);
-      
+    
     if (!printJob) {
       return res.status(404).json({ message: 'Print job not found' });
     }
     
-    // Can only mark jobs that are pending as completed
-    if (printJob.status !== 'pending') {
+    // Can only complete jobs that are pending or processing
+    if (printJob.status !== 'pending' && printJob.status !== 'processing') {
       return res.status(400).json({ 
-        message: `Cannot mark a job with status: ${printJob.status} as completed` 
+        message: `Cannot complete a job with status: ${printJob.status}` 
       });
     }
     
-    // Update the job status
+    // Find the user who owns this print job
+    const user = await User.findById(printJob.userId);
+    
+    if (!user) {
+      return res.status(404).json({ message: 'User not found' });
+    }
+    
+    // Calculate points to deduct (should be set during upload, but fallback to total pages if needed)
+    const pointsToDeduct = printJob.pointsUsed || printJob.printSettings.totalPages || 1;
+    
+    // Check if user has enough points
+    if (user.points < pointsToDeduct) {
+      return res.status(400).json({
+        message: 'User does not have enough points',
+        required: pointsToDeduct,
+        available: user.points
+      });
+    }
+    
+    // Update user's points
+    user.points = Math.max(0, user.points - pointsToDeduct); // Ensure points don't go below 0
+    await user.save();
+    
+    // Update print job status
     printJob.status = 'completed';
     await printJob.save();
     
-    return res.status(200).json({ 
-      message: 'Print job marked as completed successfully',
+    return res.status(200).json({
+      message: 'Print job completed successfully',
       printJob: {
         id: printJob._id,
-        fileName: printJob.fileName,
-        status: printJob.status
+        status: printJob.status,
+        pointsUsed: pointsToDeduct
+      },
+      user: {
+        id: user._id,
+        points: user.points
       }
     });
   } catch (error) {
     console.error('Error marking print job as completed:', error);
-    return res.status(500).json({ message: 'Failed to update print job status', error: error.message });
+    return res.status(500).json({ 
+      message: 'Failed to mark print job as completed', 
+      error: error.message 
+    });
   }
 };
 
