@@ -1,8 +1,11 @@
 import { useState, useEffect } from 'react'
 import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom'
 import { createTheme, ThemeProvider, CssBaseline } from '@mui/material'
+import { ToastContainer } from 'react-toastify'
+import 'react-toastify/dist/ReactToastify.css'
 import Login from './pages/auth/Login'
 import Register from './pages/auth/Register'
+import VerifyEmail from './components/VerifyEmail'
 import Dashboard from './pages/dashboard/Dashboard'
 import PrintHub from './pages/printing/PrintHub'
 import './App.css'
@@ -93,6 +96,7 @@ function App() {
         <Routes>
           <Route path="/login" element={<Login />} />
           <Route path="/register" element={<Register />} />
+          <Route path="/verify-email" element={<VerifyEmail />} />
           <Route path="/print-hub" element={<PrintHub />} />
           <Route 
             path="/dashboard" 
@@ -112,6 +116,7 @@ function App() {
           />
         </Routes>
       </BrowserRouter>
+      <ToastContainer position="top-right" autoClose={5000} />
     </ThemeProvider>
   )
 }

@@ -14,7 +14,6 @@ import {
   CircularProgress,
 } from '@mui/material';
 import { GitHub as GitHubIcon, Google as GoogleIcon } from '@mui/icons-material';
-import { authAPI } from '../../utils/api';
 
 const Login = () => {
   const navigate = useNavigate();
@@ -37,11 +36,38 @@ const Login = () => {
     
     try {
       console.log('Login attempt with:', { email });
-      const data = await authAPI.login({ email, password });
+      
+      // Direct API call instead of using authAPI.login
+      const response = await fetch('http://localhost:8080/api/auth/login', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ email, password }),
+      });
+      
+      const data = await response.json();
+      
+      if (!response.ok) {
+        // Check if the error is due to unverified email
+        if (response.status === 403 && 
+            data.message === 'Email not verified' && 
+            data.email) {
+          // Redirect to verification page
+          navigate('/verify-email', { 
+            state: { email: data.email } 
+          });
+          return;
+        }
+        
+        throw new Error(data.message || 'Login failed. Please check your credentials.');
+      }
+      
       console.log('Login response:', data);
       
-      // Store token in localStorage
+      // Store tokens in localStorage
       localStorage.setItem('token', data.token);
+      localStorage.setItem('refreshToken', data.refreshToken);
       
       // Redirect to dashboard instead of home page
       navigate('/dashboard');

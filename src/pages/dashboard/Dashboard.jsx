@@ -481,129 +481,129 @@ const Dashboard = () => {
 
           {/* Dashboard Tab */}
           <TabPanel value={tabValue} index={0}>
-            <Typography variant="h4" sx={{ mb: 3 }}>
-              Welcome, {user?.name || 'User'}!
-            </Typography>
+          <Typography variant="h4" sx={{ mb: 3 }}>
+            Welcome, {user?.name || 'User'}!
+          </Typography>
 
-            <Grid container spacing={3}>
-              {/* Stats Cards */}
-              <Grid item xs={12} md={4}>
-                <Card sx={{ height: '100%' }}>
-                  <CardContent>
-                    <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
-                      <PrintIcon color="primary" sx={{ mr: 1 }} />
-                      <Typography variant="h6">Print Jobs</Typography>
-                    </Box>
-                    <Typography variant="h3" sx={{ fontWeight: 'bold', mb: 1 }}>
+          <Grid container spacing={3}>
+            {/* Stats Cards */}
+            <Grid item xs={12} md={4}>
+              <Card sx={{ height: '100%' }}>
+                <CardContent>
+                  <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
+                    <PrintIcon color="primary" sx={{ mr: 1 }} />
+                    <Typography variant="h6">Print Jobs</Typography>
+                  </Box>
+                  <Typography variant="h3" sx={{ fontWeight: 'bold', mb: 1 }}>
                       {printJobs.length || '0'}
-                    </Typography>
-                    <Typography variant="body2" color="text.secondary">
+                  </Typography>
+                  <Typography variant="body2" color="text.secondary">
                       {printJobs.filter(job => job.status === 'pending' || job.status === 'processing').length} in progress, 
                       {' '}{printJobs.filter(job => job.status === 'completed').length} completed
-                    </Typography>
-                  </CardContent>
-                </Card>
-              </Grid>
+                  </Typography>
+                </CardContent>
+              </Card>
+            </Grid>
 
-              <Grid item xs={12} md={4}>
-                <Card sx={{ height: '100%' }}>
-                  <CardContent>
-                    <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
-                      <DescriptionIcon color="primary" sx={{ mr: 1 }} />
-                      <Typography variant="h6">Templates</Typography>
-                    </Box>
-                    <Typography variant="h3" sx={{ fontWeight: 'bold', mb: 1 }}>
-                      5
-                    </Typography>
-                    <Typography variant="body2" color="text.secondary">
-                      2 custom, 3 from library
-                    </Typography>
-                  </CardContent>
-                </Card>
-              </Grid>
+            <Grid item xs={12} md={4}>
+              <Card sx={{ height: '100%' }}>
+                <CardContent>
+                  <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
+                    <DescriptionIcon color="primary" sx={{ mr: 1 }} />
+                    <Typography variant="h6">Templates</Typography>
+                  </Box>
+                  <Typography variant="h3" sx={{ fontWeight: 'bold', mb: 1 }}>
+                    5
+                  </Typography>
+                  <Typography variant="body2" color="text.secondary">
+                    2 custom, 3 from library
+                  </Typography>
+                </CardContent>
+              </Card>
+            </Grid>
 
-              <Grid item xs={12} md={4}>
-                <Card sx={{ height: '100%' }}>
-                  <CardContent>
-                    <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
-                      <HistoryIcon color="primary" sx={{ mr: 1 }} />
-                      <Typography variant="h6">Print History</Typography>
-                    </Box>
-                    <Typography variant="h3" sx={{ fontWeight: 'bold', mb: 1 }}>
+            <Grid item xs={12} md={4}>
+              <Card sx={{ height: '100%' }}>
+                <CardContent>
+                  <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
+                    <HistoryIcon color="primary" sx={{ mr: 1 }} />
+                    <Typography variant="h6">Print History</Typography>
+                  </Box>
+                  <Typography variant="h3" sx={{ fontWeight: 'bold', mb: 1 }}>
                       {printJobs.filter(job => job.status === 'completed').length}
-                    </Typography>
-                    <Typography variant="body2" color="text.secondary">
+                  </Typography>
+                  <Typography variant="body2" color="text.secondary">
                       Last print: {printJobs.length > 0 ? formatDate(printJobs[0].createdAt) : 'No prints yet'}
-                    </Typography>
-                  </CardContent>
-                </Card>
-              </Grid>
-
-              {/* Quick Actions */}
-              <Grid item xs={12}>
-                <Paper sx={{ p: 3, mt: 3 }}>
-                  <Typography variant="h5" sx={{ mb: 2 }}>
-                    Quick Actions
                   </Typography>
-                  <Grid container spacing={2}>
-                    <Grid item xs={12} sm={6} md={3}>
-                      <Button
-                        variant="contained"
-                        startIcon={<PrintIcon />}
-                        fullWidth
-                        sx={{ py: 1.5, textTransform: 'none' }}
+                </CardContent>
+              </Card>
+            </Grid>
+
+            {/* Quick Actions */}
+            <Grid item xs={12}>
+              <Paper sx={{ p: 3, mt: 3 }}>
+                <Typography variant="h5" sx={{ mb: 2 }}>
+                  Quick Actions
+                </Typography>
+                <Grid container spacing={2}>
+                  <Grid item xs={12} sm={6} md={3}>
+                    <Button
+                      variant="contained"
+                      startIcon={<PrintIcon />}
+                      fullWidth
+                      sx={{ py: 1.5, textTransform: 'none' }}
                         onClick={() => setTabValue(1)}
-                      >
-                        New Print Job
-                      </Button>
-                    </Grid>
-                    <Grid item xs={12} sm={6} md={3}>
-                      <Button
-                        variant="outlined"
-                        startIcon={<DescriptionIcon />}
-                        fullWidth
-                        sx={{ py: 1.5, textTransform: 'none' }}
-                      >
-                        Create Template
-                      </Button>
-                    </Grid>
-                    <Grid item xs={12} sm={6} md={3}>
-                      <Button
-                        variant="outlined"
-                        startIcon={<HistoryIcon />}
-                        fullWidth
-                        sx={{ py: 1.5, textTransform: 'none' }}
-                      >
-                        View History
-                      </Button>
-                    </Grid>
-                    <Grid item xs={12} sm={6} md={3}>
-                      <Button
-                        variant="outlined"
-                        startIcon={<SettingsIcon />}
-                        fullWidth
-                        sx={{ py: 1.5, textTransform: 'none' }}
-                      >
-                        Settings
-                      </Button>
-                    </Grid>
+                    >
+                      New Print Job
+                    </Button>
                   </Grid>
-                </Paper>
-              </Grid>
+                  <Grid item xs={12} sm={6} md={3}>
+                    <Button
+                      variant="outlined"
+                      startIcon={<DescriptionIcon />}
+                      fullWidth
+                      sx={{ py: 1.5, textTransform: 'none' }}
+                    >
+                      Create Template
+                    </Button>
+                  </Grid>
+                  <Grid item xs={12} sm={6} md={3}>
+                    <Button
+                      variant="outlined"
+                      startIcon={<HistoryIcon />}
+                      fullWidth
+                      sx={{ py: 1.5, textTransform: 'none' }}
+                    >
+                      View History
+                    </Button>
+                  </Grid>
+                  <Grid item xs={12} sm={6} md={3}>
+                    <Button
+                      variant="outlined"
+                      startIcon={<SettingsIcon />}
+                      fullWidth
+                      sx={{ py: 1.5, textTransform: 'none' }}
+                    >
+                      Settings
+                    </Button>
+                  </Grid>
+                </Grid>
+              </Paper>
+            </Grid>
 
-              {/* Recent Activity */}
-              <Grid item xs={12}>
-                <Paper sx={{ p: 3, mt: 3 }}>
-                  <Typography variant="h5" sx={{ mb: 2 }}>
-                    Recent Activity
-                  </Typography>
-                  <List>
+            {/* Recent Activity */}
+            <Grid item xs={12}>
+              <Paper sx={{ p: 3, mt: 3 }}>
+                <Typography variant="h5" sx={{ mb: 2 }}>
+                  Recent Activity
+                </Typography>
+                <List>
                     {printJobs.slice(0, 3).map((job) => (
                       <ListItem key={job._id} divider>
-                        <ListItemIcon>
-                          <PrintIcon color="primary" />
-                        </ListItemIcon>
-                        <ListItemText
+                    <ListItemIcon>
+                      <PrintIcon color="primary" />
+                    </ListItemIcon>
+                    <ListItemText
                           primary={job.fileName}
                           secondary={formatDate(job.createdAt)}
                         />
@@ -617,11 +617,11 @@ const Dashboard = () => {
                         >
                           {job.status}
                         </Typography>
-                      </ListItem>
+                  </ListItem>
                     ))}
                     {printJobs.length === 0 && (
-                      <ListItem>
-                        <ListItemText
+                  <ListItem>
+                    <ListItemText
                           primary="No print jobs yet"
                           secondary={
                             <Button 
@@ -634,13 +634,13 @@ const Dashboard = () => {
                               Upload a PDF to start printing
                             </Button>
                           }
-                        />
-                      </ListItem>
+                    />
+                  </ListItem>
                     )}
-                  </List>
-                </Paper>
-              </Grid>
+                </List>
+              </Paper>
             </Grid>
+          </Grid>
           </TabPanel>
 
           {/* Upload PDF Tab */}

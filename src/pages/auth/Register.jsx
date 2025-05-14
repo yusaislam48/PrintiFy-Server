@@ -92,11 +92,9 @@ const Register = () => {
         password: formData.password,
       });
       
-      // Store token in localStorage
-      localStorage.setItem('token', data.token);
+      // Navigate to verification page with email in state
+      navigate('/verify-email', { state: { email: formData.email } });
       
-      // Redirect to dashboard instead of home page
-      navigate('/dashboard');
     } catch (err) {
       console.error('Registration error details:', err);
       

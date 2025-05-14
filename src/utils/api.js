@@ -131,13 +131,58 @@ export const authAPI = {
   register: async (userData) => {
     try {
       const response = await api.post('/auth/register', userData);
-      // Save tokens
+      // Save tokens if they exist (no tokens for unverified users)
       if (response.data.token && response.data.refreshToken) {
         setTokens(response.data.token, response.data.refreshToken);
       }
       return response.data;
     } catch (error) {
       throw error.response?.data || { message: 'Registration failed' };
+    }
+  },
+
+  // Verify email with code
+  verify: async (verificationData) => {
+    try {
+      console.log('Verifying email with data:', verificationData);
+      
+      // Ensure code is a string and trimmed
+      if (verificationData.code) {
+        verificationData.code = verificationData.code.toString().trim();
+      }
+      
+      const response = await api.post('/auth/verify', verificationData);
+      console.log('Verification API response:', response.data);
+      
+      // Save tokens after successful verification
+      if (response.data.token && response.data.refreshToken) {
+        setTokens(response.data.token, response.data.refreshToken);
+      }
+      return response.data;
+    } catch (error) {
+      console.error('Verification error details:', {
+        message: error.message,
+        response: error.response?.data,
+        status: error.response?.status
+      });
+      throw error;
+    }
+  },
+
+  // Resend verification code
+  resendVerification: async (emailData) => {
+    try {
+      console.log('Resending verification to:', emailData.email);
+      const response = await api.post('/auth/resend-verification', emailData);
+      console.log('Resend verification response:', response.data);
+      return response.data;
+    } catch (error) {
+      console.error('Resend verification error details:', {
+        message: error.message,
+        response: error.response?.data,
+        status: error.response?.status
+      });
+      throw error;
     }
   },
 
