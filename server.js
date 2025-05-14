@@ -4,6 +4,9 @@ const dotenv = require('dotenv');
 const connectDB = require('./config/db');
 const authRoutes = require('./routes/auth');
 const userRoutes = require('./routes/user');
+const printRoutes = require('./routes/print');
+const { cloudinary } = require('./config/cloudinary');
+const axios = require('axios');
 
 // Load environment variables
 dotenv.config();
@@ -36,6 +39,105 @@ app.use((req, res, next) => {
 // Routes
 app.use('/api/auth', authRoutes);
 app.use('/api/users', userRoutes);
+app.use('/api/print', printRoutes);
+
+// PDF Proxy route - handles /pdf-proxy/* requests
+app.get('/pdf-proxy/:cloud_name/raw/upload/:file_path', async (req, res) => {
+  try {
+    const { cloud_name, file_path } = req.params;
+    const isDownload = req.query.download === 'true';
+    
+    console.log(`PDF Proxy request: cloud_name=${cloud_name}, file_path=${file_path}, download=${isDownload}`);
+    
+    if (!cloud_name || !file_path) {
+      console.error('Missing parameters in PDF proxy request');
+      return res.status(400).json({ message: 'Missing parameters' });
+    }
+    
+    // Construct a cloudinary URL for viewing
+    const rawFilePath = file_path.endsWith('.pdf.pdf') 
+      ? file_path.replace(/\.pdf\.pdf$/, '.pdf')  // Fix double extension
+      : file_path;
+
+    const publicId = `printify/pdfs/${rawFilePath.replace(/\.pdf$/, '')}`;
+    console.log(`Constructed public ID: ${publicId}`);
+    
+    // Create URL options for better PDF accessibility
+    const viewOptions = {
+      resource_type: 'raw',
+      type: 'upload',
+      flags: isDownload ? 'attachment' : 'attachment:false',  // Force download if requested
+      disposition: isDownload ? 'attachment' : 'inline',      // Display in browser or download
+      secure: true,
+    };
+    
+    // Make sure the public ID has the correct extension
+    const finalPublicId = publicId.endsWith('.pdf') ? publicId : `${publicId}.pdf`;
+    const pdfUrl = cloudinary.url(finalPublicId, viewOptions);
+    console.log(`Generated Cloudinary URL: ${pdfUrl}`);
+    
+    try {
+      // First check if the PDF exists with a HEAD request
+      await axios({
+        url: pdfUrl,
+        method: 'HEAD',
+        timeout: 5000
+      });
+      
+      // Fetch and stream the PDF from Cloudinary
+      const response = await axios({
+        url: pdfUrl,
+        method: 'GET',
+        responseType: 'stream',
+        timeout: 15000 // 15 second timeout
+      });
+      
+      // Set appropriate headers
+      res.setHeader('Content-Type', 'application/pdf');
+      
+      // Set content disposition based on download flag
+      if (isDownload) {
+        const fileName = file_path.split('_').slice(1).join('_');
+        res.setHeader('Content-Disposition', `attachment; filename="${fileName || 'document.pdf'}"`);
+      } else {
+        res.setHeader('Content-Disposition', 'inline');
+      }
+      
+      // Add CORS headers to avoid browser restrictions
+      res.setHeader('Access-Control-Allow-Origin', '*');
+      res.setHeader('Access-Control-Allow-Methods', 'GET');
+      res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+      
+      // Log success
+      console.log(`Successfully streaming PDF: ${publicId}`);
+      
+      // Pipe the PDF data directly to the response
+      response.data.pipe(res);
+    } catch (fetchError) {
+      console.error('Failed to fetch PDF from Cloudinary:', fetchError.message);
+      
+      if (fetchError.response) {
+        const statusCode = fetchError.response.status;
+        console.error(`Cloudinary returned status code: ${statusCode}`);
+        
+        if (statusCode === 404) {
+          return res.status(404).json({ message: 'PDF file not found in cloud storage' });
+        }
+      }
+      
+      return res.status(500).json({ 
+        message: 'Error fetching PDF from cloud storage',
+        error: fetchError.message
+      });
+    }
+  } catch (error) {
+    console.error('PDF proxy general error:', error);
+    res.status(500).json({ 
+      message: 'Error processing PDF request',
+      error: error.message
+    });
+  }
+});
 
 // Home route
 app.get('/', (req, res) => {
@@ -52,4 +154,4 @@ app.use((err, req, res, next) => {
 const PORT = process.env.PORT || 5000;
 app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
 
-module.exports = app; 
+module.exports = app;

@@ -32,10 +32,10 @@ exports.register = async (req, res) => {
   try {
     console.log('Register request received:', req.body);
     
-    const { name, email, password } = req.body;
+    const { name, email, password, studentId, phone } = req.body;
 
     // Validate input
-    if (!name || !email || !password) {
+    if (!name || !email || !password || !studentId || !phone) {
       console.log('Missing required fields');
       return res.status(400).json({ message: 'All fields are required' });
     }
@@ -47,12 +47,21 @@ exports.register = async (req, res) => {
       return res.status(400).json({ message: 'User with this email already exists' });
     }
 
+    // Check if student ID already exists
+    const studentIdExists = await User.findOne({ studentId });
+    if (studentIdExists) {
+      console.log('User already exists with student ID:', studentId);
+      return res.status(400).json({ message: 'User with this student ID already exists' });
+    }
+
     // Create new user
     console.log('Creating new user with email:', email);
     const user = await User.create({
       name,
       email,
-      password
+      password,
+      studentId,
+      phone
     });
 
     // Generate tokens
@@ -65,6 +74,8 @@ exports.register = async (req, res) => {
       _id: user._id,
       name: user.name,
       email: user.email,
+      studentId: user.studentId,
+      phone: user.phone,
       role: user.role,
       token,
       refreshToken
@@ -97,13 +108,13 @@ exports.login = async (req, res) => {
     const { email, password } = req.body;
 
     // Check if user exists
-    const user = await User.findOne({ email });
+    const user = await User.findOne({ email }).select('+password');
     if (!user) {
       return res.status(401).json({ message: 'Invalid email or password' });
     }
 
     // Check password
-    const isMatch = await user.comparePassword(password);
+    const isMatch = await user.matchPassword(password);
     if (!isMatch) {
       return res.status(401).json({ message: 'Invalid email or password' });
     }
