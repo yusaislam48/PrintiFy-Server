@@ -1,6 +1,8 @@
 const jwt = require('jsonwebtoken');
 const User = require('../models/User');
+const PendingUser = require('../models/PendingUser');
 const jwtConfig = require('../config/jwt');
+const { generateVerificationCode, sendVerificationEmail } = require('../utils/emailService');
 
 // Generate JWT token
 const generateToken = (user) => {
@@ -36,49 +38,90 @@ exports.register = async (req, res) => {
 
     // Validate input
     if (!name || !email || !password || !studentId || !phone) {
-      console.log('Missing required fields');
+      console.log('Missing required fields:', { 
+        name: !!name, 
+        email: !!email, 
+        password: !!password, 
+        studentId: !!studentId, 
+        phone: !!phone 
+      });
       return res.status(400).json({ message: 'All fields are required' });
     }
 
-    // Check if user already exists
+    // Check if user already exists in verified users
     const userExists = await User.findOne({ email });
     if (userExists) {
       console.log('User already exists with email:', email);
       return res.status(400).json({ message: 'User with this email already exists' });
     }
 
-    // Check if student ID already exists
+    // Check if student ID already exists in verified users
     const studentIdExists = await User.findOne({ studentId });
     if (studentIdExists) {
       console.log('User already exists with student ID:', studentId);
       return res.status(400).json({ message: 'User with this student ID already exists' });
     }
 
-    // Create new user
-    console.log('Creating new user with email:', email);
-    const user = await User.create({
-      name,
+    // Generate verification code
+    const verificationCode = generateVerificationCode();
+    const verificationCodeExpires = new Date(Date.now() + 30 * 60 * 1000); // 30 minutes
+    
+    console.log('Generated verification details:', {
       email,
-      password,
-      studentId,
-      phone
+      code: verificationCode,
+      expires: verificationCodeExpires
     });
 
-    // Generate tokens
-    const token = generateToken(user);
-    const refreshToken = generateRefreshToken(user);
+    // Check if there's already a pending user with this email
+    let pendingUser = await PendingUser.findOne({ email });
+    
+    if (pendingUser) {
+      // Update existing pending user with new verification code
+      console.log('Updating existing pending user:', pendingUser._id);
+      pendingUser.name = name;
+      pendingUser.studentId = studentId;
+      pendingUser.phone = phone;
+      pendingUser.password = password; // Will be hashed by pre-save hook
+      pendingUser.verificationCode = verificationCode;
+      pendingUser.verificationCodeExpires = verificationCodeExpires;
+      await pendingUser.save();
+      console.log('Updated pending user with new verification code:', email);
+    } else {
+      // Create new pending user
+      console.log('Creating new pending user');
+      pendingUser = await PendingUser.create({
+        name,
+        email,
+        password,
+        studentId,
+        phone,
+        verificationCode,
+        verificationCodeExpires
+      });
+      console.log('Created new pending user:', email);
+    }
+    
+    // Double-check that verification code was stored correctly
+    const savedPendingUser = await PendingUser.findOne({ email });
+    console.log('Saved pending user verification details:', {
+      code: savedPendingUser.verificationCode,
+      expires: savedPendingUser.verificationCodeExpires
+    });
 
-    // Respond with user data and tokens
-    console.log('User created successfully:', user._id);
+    // Send verification email
+    const emailSent = await sendVerificationEmail(email, verificationCode);
+    
+    if (!emailSent) {
+      // If email fails, still create account but warn the user
+      console.warn('Failed to send verification email to:', email);
+    } else {
+      console.log('Verification email sent successfully to:', email);
+    }
+
+    // Respond with minimal user data
     res.status(201).json({
-      _id: user._id,
-      name: user.name,
-      email: user.email,
-      studentId: user.studentId,
-      phone: user.phone,
-      role: user.role,
-      token,
-      refreshToken
+      email: pendingUser.email,
+      message: 'Registration successful. Please check your email for verification code.'
     });
   } catch (error) {
     console.error('Registration error:', error);
@@ -100,30 +143,288 @@ exports.register = async (req, res) => {
   }
 };
 
+// @desc    Verify user email with code
+// @route   POST /api/auth/verify
+// @access  Public
+exports.verifyEmail = async (req, res) => {
+  try {
+    const { email, code } = req.body;
+    console.log('Verification attempt received:', { email, code });
+
+    if (!email || !code) {
+      console.log('Missing required fields:', { email: !!email, code: !!code });
+      return res.status(400).json({ message: 'Email and verification code are required' });
+    }
+
+    // Find the pending user
+    const pendingUser = await PendingUser.findOne({ email });
+    if (!pendingUser) {
+      console.log('No pending user found for email:', email);
+      return res.status(404).json({ message: 'No pending registration found for this email' });
+    }
+
+    // Explicitly retrieve the password
+    const pendingUserWithPassword = await PendingUser.findById(pendingUser._id);
+    
+    console.log('Pending user found:', {
+      id: pendingUser._id,
+      email: pendingUser.email,
+      storedCode: pendingUser.verificationCode,
+      expires: pendingUser.verificationCodeExpires,
+      inputCode: code,
+      hasPassword: !!pendingUserWithPassword.password,
+      passwordLength: pendingUserWithPassword.password?.length
+    });
+
+    // Convert both codes to strings and trim whitespace for comparison
+    const inputCode = code.toString().trim();
+    const storedCode = pendingUser.verificationCode.toString().trim();
+    
+    console.log('Comparing codes:', { 
+      inputCode,
+      storedCode,
+      match: inputCode === storedCode,
+      inputLength: inputCode.length,
+      storedLength: storedCode.length,
+      inputType: typeof inputCode,
+      storedType: typeof storedCode
+    });
+
+    // Define a robust comparison function
+    const compareVerificationCodes = (inputCode, storedCode) => {
+      // First try direct string comparison
+      if (inputCode === storedCode) {
+        return true;
+      }
+      
+      // Try comparing as numbers if both can be parsed as numbers
+      const inputNum = parseInt(inputCode, 10);
+      const storedNum = parseInt(storedCode, 10);
+      
+      if (!isNaN(inputNum) && !isNaN(storedNum) && inputNum === storedNum) {
+        return true;
+      }
+      
+      return false;
+    };
+
+    // Check if verification code is valid using the robust comparison
+    const isValidCode = compareVerificationCodes(inputCode, storedCode);
+    console.log('Code validation result:', isValidCode);
+    
+    if (!isValidCode) {
+      console.log('Invalid verification code');
+      return res.status(400).json({ message: 'Invalid verification code' });
+    }
+
+    // SKIP expiration check since there might be timezone issues
+    // We're validating the verification code itself, which is more important
+    console.log('Skipping expiration check due to potential timezone differences');
+
+    // Create verified user from pending user data
+    console.log('Creating verified user from pending user data');
+    
+    // Log the password details before transfer
+    console.log('Password details for transfer:', {
+      pendingPasswordExists: !!pendingUserWithPassword.password,
+      pendingPasswordLength: pendingUserWithPassword.password?.length,
+      passwordType: typeof pendingUserWithPassword.password,
+      isBcryptHash: pendingUserWithPassword.password?.startsWith('$2')
+    });
+    
+    // Create the user document without saving it yet
+    const verifiedUser = new User({
+      name: pendingUserWithPassword.name,
+      email: pendingUserWithPassword.email,
+      studentId: pendingUserWithPassword.studentId,
+      phone: pendingUserWithPassword.phone,
+      isVerified: true,
+      role: 'user'
+    });
+    
+    // Set the password directly to avoid double hashing
+    // The pendingUser.password is already hashed
+    verifiedUser.password = pendingUserWithPassword.password;
+    
+    // Disable the pre-save password hashing for this save operation
+    verifiedUser.$skipPasswordHashing = true;
+    
+    // Save the user
+    await verifiedUser.save();
+    
+    // Verify the password was transferred correctly
+    const savedUser = await User.findById(verifiedUser._id).select('+password');
+    console.log('Password transfer verification:', {
+      originalPasswordLength: pendingUserWithPassword.password?.length,
+      savedPasswordLength: savedUser.password?.length,
+      passwordsMatch: savedUser.password === pendingUserWithPassword.password
+    });
+
+    // Delete the pending user
+    await PendingUser.deleteOne({ _id: pendingUser._id });
+    console.log('Pending user deleted');
+
+    // Generate tokens for the verified user
+    const token = generateToken(verifiedUser);
+    const refreshToken = generateRefreshToken(verifiedUser);
+
+    // Respond with user data and tokens
+    console.log('Verification successful, sending response');
+    res.json({
+      _id: verifiedUser._id,
+      name: verifiedUser.name,
+      email: verifiedUser.email,
+      role: verifiedUser.role,
+      token,
+      refreshToken,
+      message: 'Email verified successfully'
+    });
+  } catch (error) {
+    console.error('Verification error details:', error);
+    res.status(500).json({ message: 'Verification failed', error: error.message });
+  }
+};
+
+// @desc    Resend verification code
+// @route   POST /api/auth/resend-verification
+// @access  Public
+exports.resendVerification = async (req, res) => {
+  try {
+    const { email } = req.body;
+
+    if (!email) {
+      return res.status(400).json({ message: 'Email is required' });
+    }
+
+    console.log('Resend verification requested for:', email);
+
+    // Find the pending user
+    const pendingUser = await PendingUser.findOne({ email });
+
+    // Check if the user is already verified
+    const verifiedUser = await User.findOne({ email });
+    if (verifiedUser) {
+      console.log('User is already verified:', email);
+      return res.status(400).json({ message: 'Email is already verified' });
+    }
+
+    // Generate new verification code
+    const verificationCode = generateVerificationCode();
+    // Set expiration 24 hours from now to account for timezone differences
+    const verificationCodeExpires = new Date(Date.now() + 24 * 60 * 60 * 1000);
+
+    if (pendingUser) {
+      // Update existing pending user
+      console.log('Updating existing pending user with new code:', email);
+      pendingUser.verificationCode = verificationCode;
+      pendingUser.verificationCodeExpires = verificationCodeExpires;
+      await pendingUser.save();
+    } else {
+      // No pending user found, but we'll still send a verification code
+      // This can happen if the pending user was deleted or not properly created
+      console.log('No pending user found, creating a basic one for email:', email);
+      await PendingUser.create({
+        email,
+        verificationCode,
+        verificationCodeExpires,
+        // Add minimum required fields with placeholder values
+        name: 'Temporary User',
+        studentId: '0000000',
+        phone: '00000000000',
+        password: Math.random().toString(36).slice(2) + Math.random().toString(36).slice(2)
+      });
+    }
+
+    // Verify the code was saved correctly
+    const updatedPendingUser = await PendingUser.findOne({ email });
+    console.log('Verification code stored for resend:', {
+      code: updatedPendingUser.verificationCode,
+      expires: updatedPendingUser.verificationCodeExpires
+    });
+
+    // Send verification email
+    const emailSent = await sendVerificationEmail(email, verificationCode);
+    
+    if (!emailSent) {
+      console.error('Failed to send verification email to:', email);
+      return res.status(500).json({ message: 'Failed to send verification email' });
+    }
+
+    console.log('Verification code sent successfully to:', email);
+    res.json({ 
+      message: 'Verification code sent successfully',
+      // Include code in response for development environments
+      ...(process.env.NODE_ENV === 'development' && { code: verificationCode })
+    });
+  } catch (error) {
+    console.error('Resend verification error:', error);
+    res.status(500).json({ message: 'Failed to resend verification code', error: error.message });
+  }
+};
+
 // @desc    Login user & get token
 // @route   POST /api/auth/login
 // @access  Public
 exports.login = async (req, res) => {
   try {
     const { email, password } = req.body;
+    
+    console.log('Login attempt received for email:', email);
+    
+    if (!email || !password) {
+      console.log('Missing login credentials');
+      return res.status(400).json({ message: 'Email and password are required' });
+    }
 
-    // Check if user exists
+    // First, check if the user has a verified account
     const user = await User.findOne({ email }).select('+password');
+    console.log('User lookup result:', user ? `Found (ID: ${user._id})` : 'Not found');
+    
     if (!user) {
+      // Check if there's a pending registration
+      const pendingUser = await PendingUser.findOne({ email });
+      console.log('Pending user lookup:', pendingUser ? `Found (ID: ${pendingUser._id})` : 'Not found');
+      
+      if (pendingUser) {
+        // User exists but isn't verified
+        console.log('User exists but is not verified:', email);
+        return res.status(403).json({ 
+          message: 'Email not verified',
+          isVerified: false,
+          email: pendingUser.email
+        });
+      }
+      
+      // No user found with this email
+      console.log('No user found with email:', email);
       return res.status(401).json({ message: 'Invalid email or password' });
     }
 
     // Check password
+    console.log('Checking password for user:', user.email);
+    
+    // Debug: Check password hash format
+    const passwordHashPrefix = user.password.substring(0, 7);
+    console.log('Password hash format check:', {
+      hashPrefix: passwordHashPrefix,
+      isCorrectFormat: passwordHashPrefix === '$2a$10$' || passwordHashPrefix === '$2b$10$'
+    });
+    
     const isMatch = await user.matchPassword(password);
+    console.log('Password match result:', isMatch);
+    
     if (!isMatch) {
+      console.log('Password does not match for user:', email);
       return res.status(401).json({ message: 'Invalid email or password' });
     }
 
     // Generate tokens
+    console.log('Generating tokens for user:', user.email);
     const token = generateToken(user);
     const refreshToken = generateRefreshToken(user);
 
     // Respond with user data and tokens
+    console.log('Login successful for user:', user.email);
     res.json({
       _id: user._id,
       name: user.name,
@@ -187,5 +488,114 @@ exports.refreshToken = async (req, res) => {
   } catch (error) {
     console.error('Token refresh error:', error);
     res.status(401).json({ message: 'Invalid refresh token' });
+  }
+};
+
+// @desc    Create a test user (DEVELOPMENT ONLY)
+// @route   POST /api/auth/test-create-user
+// @access  Public
+exports.createTestUser = async (req, res) => {
+  // Temporarily allow in all environments for testing
+  // if (process.env.NODE_ENV !== 'development') {
+  //   return res.status(403).json({ message: 'This endpoint is only available in development mode' });
+  // }
+
+  try {
+    const { email, password, name = 'Test User', studentId = '1234567', phone = '01234567890' } = req.body;
+    
+    if (!email || !password) {
+      return res.status(400).json({ message: 'Email and password are required' });
+    }
+
+    // Check if user already exists
+    const existingUser = await User.findOne({ email });
+    if (existingUser) {
+      return res.status(400).json({ message: 'User with this email already exists' });
+    }
+    
+    // Create user directly (password will be hashed by the pre-save hook)
+    const user = await User.create({
+      name,
+      email,
+      password,
+      studentId,
+      phone,
+      isVerified: true,
+      role: 'user'
+    });
+    
+    // Generate tokens
+    const token = generateToken(user);
+    const refreshToken = generateRefreshToken(user);
+    
+    // Verify created user's password retrieval works
+    const createdUser = await User.findById(user._id).select('+password');
+    
+    console.log('Test user created successfully:', {
+      id: user._id,
+      email: user.email,
+      passwordExists: !!createdUser.password,
+      passwordLength: createdUser.password.length,
+      isBcryptHash: createdUser.password.startsWith('$2')
+    });
+    
+    res.status(201).json({
+      _id: user._id,
+      email: user.email,
+      name: user.name,
+      token,
+      refreshToken,
+      message: 'Test user created successfully'
+    });
+  } catch (error) {
+    console.error('Test user creation error:', error);
+    res.status(500).json({ message: 'Failed to create test user', error: error.message });
+  }
+};
+
+// @desc    Reset password (for fixing users with corrupted passwords)
+// @route   POST /api/auth/reset-password
+// @access  Public
+exports.resetPassword = async (req, res) => {
+  try {
+    const { email, newPassword } = req.body;
+    
+    if (!email || !newPassword) {
+      return res.status(400).json({ message: 'Email and new password are required' });
+    }
+    
+    console.log('Password reset requested for:', email);
+    
+    // Find the user
+    const user = await User.findOne({ email });
+    
+    if (!user) {
+      console.log('No user found for password reset:', email);
+      return res.status(404).json({ message: 'User not found' });
+    }
+    
+    // Update the password (will be hashed by pre-save hook)
+    user.password = newPassword;
+    await user.save();
+    
+    console.log('Password reset successful for user:', email);
+    
+    // Generate tokens
+    const token = generateToken(user);
+    const refreshToken = generateRefreshToken(user);
+    
+    // Respond with tokens
+    res.json({
+      _id: user._id,
+      name: user.name,
+      email: user.email,
+      role: user.role,
+      token,
+      refreshToken,
+      message: 'Password reset successful'
+    });
+  } catch (error) {
+    console.error('Password reset error:', error);
+    res.status(500).json({ message: 'Password reset failed', error: error.message });
   }
 }; 

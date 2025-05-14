@@ -49,6 +49,16 @@ const userSchema = new mongoose.Schema({
     enum: ['user', 'admin'],
     default: 'user'
   },
+  isVerified: {
+    type: Boolean,
+    default: false
+  },
+  verificationCode: {
+    type: String
+  },
+  verificationCodeExpires: {
+    type: Date
+  },
   profilePicture: {
     type: String,
     default: ''
@@ -65,23 +75,63 @@ const userSchema = new mongoose.Schema({
 
 // Pre-save hook to hash password
 userSchema.pre('save', async function(next) {
+  // Skip hashing if explicitly requested (for transferring already hashed passwords)
+  if (this.$skipPasswordHashing) {
+    console.log('Skipping password hashing as requested');
+    delete this.$skipPasswordHashing; // Clear the flag
+    return next();
+  }
+
   // Only hash the password if it has been modified (or is new)
   if (!this.isModified('password')) return next();
   
   try {
+    console.log('Hashing password for user:', this.email);
     // Generate salt
     const salt = await bcrypt.genSalt(10);
     // Hash password
     this.password = await bcrypt.hash(this.password, salt);
     next();
   } catch (error) {
+    console.error('Error hashing password:', error);
     next(error);
   }
 });
 
 // Method to compare password
 userSchema.methods.matchPassword = async function(enteredPassword) {
-  return await bcrypt.compare(enteredPassword, this.password);
+  try {
+    console.log('===== PASSWORD VERIFICATION DEBUG =====');
+    console.log('User:', this.email);
+    console.log('Stored password hash:', this.password);
+    console.log('Entered password length:', enteredPassword?.length || 'undefined');
+    
+    if (!enteredPassword || !this.password) {
+      console.log('Invalid password comparison - missing data');
+      return false;
+    }
+    
+    // Test comparison with direct string match (should always fail for proper bcrypt hashes)
+    const directMatch = (enteredPassword === this.password);
+    console.log('Direct string comparison (expected to fail):', directMatch);
+    
+    // Generate a test hash of the entered password to see what it would look like
+    const salt = await bcrypt.genSalt(10);
+    const testHash = await bcrypt.hash(enteredPassword, salt);
+    console.log('Test hash of entered password:', testHash);
+    console.log('Test hash length:', testHash.length);
+    console.log('Stored hash length:', this.password.length);
+    
+    // Perform the actual bcrypt comparison
+    const isMatch = await bcrypt.compare(enteredPassword, this.password);
+    console.log('Bcrypt password comparison result:', isMatch);
+    console.log('===== END PASSWORD DEBUG =====');
+    
+    return isMatch;
+  } catch (error) {
+    console.error('Error comparing passwords:', error);
+    return false;
+  }
 };
 
 const User = mongoose.model('User', userSchema);
