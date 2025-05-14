@@ -20,6 +20,7 @@ import {
   DialogContent,
   DialogTitle,
   DialogActions,
+  DialogContentText,
   useMediaQuery,
   useTheme,
   Tooltip
@@ -33,7 +34,8 @@ import {
   OpenInNew as OpenInNewIcon,
   FileDownload as FileDownloadIcon,
   Warning as WarningIcon,
-  Info as InfoIcon
+  Info as InfoIcon,
+  DeleteForever as DeleteForeverIcon
 } from '@mui/icons-material';
 import { printHubAPI } from '../../utils/api';
 
@@ -57,6 +59,8 @@ const PrintHub = () => {
   const [userPoints, setUserPoints] = useState(0);
   const [successMessage, setSuccessMessage] = useState('');
   const [errorMessage, setErrorMessage] = useState('');
+  const [confirmDialogOpen, setConfirmDialogOpen] = useState(false);
+  const [jobToComplete, setJobToComplete] = useState(null);
 
   // Auto-search when studentId reaches 7 digits
   useEffect(() => {
@@ -127,6 +131,18 @@ const PrintHub = () => {
     }
   };
 
+  // Open confirmation dialog before marking as printed
+  const confirmMarkAsPrinted = (job) => {
+    setJobToComplete(job);
+    setConfirmDialogOpen(true);
+  };
+
+  // Handle confirmation dialog close
+  const handleConfirmDialogClose = () => {
+    setConfirmDialogOpen(false);
+    setJobToComplete(null);
+  };
+
   // Mark a job as printed
   const markAsPrinted = async (jobId) => {
     try {
@@ -155,7 +171,7 @@ const PrintHub = () => {
       }
       
       // Show success message
-      setSuccessMessage(`Print job marked as completed. ${response.printJob.pointsUsed} points deducted.`);
+      setSuccessMessage(`Print job marked as completed. ${response.printJob.pointsUsed} points deducted. File has been deleted from the server.`);
       setTimeout(() => setSuccessMessage(''), 5000);
     } catch (err) {
       console.error('Error marking job as printed:', err);
@@ -172,6 +188,9 @@ const PrintHub = () => {
                             'Failed to mark job as printed';
         setErrorMessage(errorMessage);
       }
+    } finally {
+      setConfirmDialogOpen(false);
+      setJobToComplete(null);
     }
   };
 
@@ -443,13 +462,13 @@ const PrintHub = () => {
                         
                         <CardActions sx={{ px: 2, pb: 2 }}>
                           {job.status === 'pending' ? (
-                            <Tooltip title={!hasEnoughPoints ? `Student needs ${pointsNeeded} points but only has ${userPoints}` : ""}>
+                            <Tooltip title={!hasEnoughPoints ? `Student needs ${pointsNeeded} points but only has ${userPoints}` : "Mark as printed (file will be deleted)"}>
                               <span> {/* Wrapper needed for disabled buttons with Tooltip */}
                                 <Button 
                                   variant="contained" 
                                   color="success"
                                   startIcon={<CheckCircleIcon />}
-                                  onClick={() => markAsPrinted(job._id)}
+                                  onClick={() => confirmMarkAsPrinted(job)}
                                   disabled={!hasEnoughPoints}
                                 >
                                   Mark as Printed
@@ -633,6 +652,43 @@ const PrintHub = () => {
             variant="outlined"
           >
             Close
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Confirmation Dialog */}
+      <Dialog
+        open={confirmDialogOpen}
+        onClose={handleConfirmDialogClose}
+        aria-labelledby="alert-dialog-title"
+        aria-describedby="alert-dialog-description"
+      >
+        <DialogTitle id="alert-dialog-title">
+          {"Confirm Print Job Completion"}
+        </DialogTitle>
+        <DialogContent>
+          <DialogContentText id="alert-dialog-description">
+            Are you sure you want to mark this job as printed? This will:
+            <Box component="ul" sx={{ mt: 1 }}>
+              <li>Deduct {jobToComplete?.pointsUsed || jobToComplete?.printSettings?.totalPages || 0} points from the student's account</li>
+              <li>Mark the job as completed</li>
+              <li>Delete the PDF file from the server</li>
+            </Box>
+            This action cannot be undone.
+          </DialogContentText>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={handleConfirmDialogClose} color="primary">
+            Cancel
+          </Button>
+          <Button 
+            onClick={() => markAsPrinted(jobToComplete?._id)} 
+            color="error" 
+            variant="contained"
+            startIcon={<DeleteForeverIcon />}
+            autoFocus
+          >
+            Complete & Delete
           </Button>
         </DialogActions>
       </Dialog>
