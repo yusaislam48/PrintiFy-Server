@@ -55,6 +55,10 @@ const printJobSchema = new mongoose.Schema({
       type: String,
       enum: ['color', 'bw'],
       default: 'color'
+    },
+    totalPages: {
+      type: Number,
+      default: 0
     }
   },
   status: {

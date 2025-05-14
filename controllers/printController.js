@@ -43,8 +43,11 @@ exports.uploadPDF = async (req, res) => {
       layout: req.body.layout || 'portrait',
       printBothSides: req.body.printBothSides === 'true',
       paperSize: req.body.paperSize || 'a4',
-      colorMode: req.body.colorMode || 'color'
+      colorMode: req.body.colorMode || 'color',
+      totalPages: parseInt(req.body.totalPages) || 0
     };
+
+    console.log('Print job with total pages:', printSettings.totalPages);
 
     // Create a new print job in database
     const printJob = new PrintJob({
@@ -72,7 +75,8 @@ exports.uploadPDF = async (req, res) => {
         fileUrl: directUrl,
         proxyUrl: proxyUrl,
         status: printJob.status,
-        createdAt: printJob.createdAt
+        createdAt: printJob.createdAt,
+        printSettings: printJob.printSettings
       }
     });
   } catch (error) {
