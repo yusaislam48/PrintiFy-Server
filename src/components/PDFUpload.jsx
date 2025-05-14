@@ -25,12 +25,10 @@ import {
 import { CloudUpload, Print, Close } from '@mui/icons-material';
 import { Document, Page, pdfjs } from 'react-pdf';
 import { printAPI } from '../utils/api';
+import { getPdfPageCount } from '../utils/pdfUtils';
 
-// Need to set up PDF.js worker source
-pdfjs.GlobalWorkerOptions.workerSrc = new URL(
-  'pdfjs-dist/build/pdf.worker.min.js',
-  import.meta.url,
-).toString();
+// Use the worker configuration from pdfUtils.js
+// This ensures we have a single source of truth for the worker configuration
 
 const PDFUpload = ({ onUploadSuccess }) => {
   const [selectedFile, setSelectedFile] = useState(null);
@@ -43,6 +41,7 @@ const PDFUpload = ({ onUploadSuccess }) => {
   const [uploadError, setUploadError] = useState(null);
   const [showSettings, setShowSettings] = useState(false);
   const [uploadedFileUrl, setUploadedFileUrl] = useState(null);
+  const [totalPagesToProcess, setTotalPagesToProcess] = useState(0);
   
   // Printing settings
   const [printSettings, setPrintSettings] = useState({
@@ -53,19 +52,49 @@ const PDFUpload = ({ onUploadSuccess }) => {
     printBothSides: false,
     paperSize: 'a4', // 'a4', 'a3', 'letter', etc.
     colorMode: 'color', // 'color' or 'bw'
+    totalPages: 0
   });
 
   // Handle file select
-  const handleFileChange = (event) => {
+  const handleFileChange = async (event) => {
     const file = event.target.files[0];
     if (file && file.type === 'application/pdf') {
       setSelectedFile(file);
-      setFilePreview(URL.createObjectURL(file));
+      const fileUrl = URL.createObjectURL(file);
+      setFilePreview(fileUrl);
+      
       // Reset page viewing
       setPageNumber(1);
       // Reset any previous upload state
       setUploadSuccess(false);
       setUploadError(null);
+      
+      // Count pages in the PDF using our utility function
+      try {
+        console.log('Loading PDF for page counting...', file.name, file.size);
+        
+        // Use the utility function that tries multiple methods
+        const pageCount = await getPdfPageCount(file);
+        
+        if (pageCount > 0) {
+          console.log(`PDF page count determined: ${pageCount}`);
+          setNumPages(pageCount);
+          updateTotalPages(pageCount, printSettings.copies, printSettings.pageRange, printSettings.customPageRange);
+        } else {
+          console.warn('Could not determine page count, using default of 1');
+          setNumPages(1);
+          updateTotalPages(1, printSettings.copies, printSettings.pageRange, printSettings.customPageRange);
+          setUploadError('Could not determine page count. Using default of 1 page.');
+        }
+      } catch (error) {
+        console.error('Error counting PDF pages:', error);
+        
+        // Set a default page count of 1 if we can't determine the actual count
+        setNumPages(1);
+        updateTotalPages(1, printSettings.copies, printSettings.pageRange, printSettings.customPageRange);
+        
+        setUploadError('Could not count PDF pages. Using default of 1 page.');
+      }
     } else {
       setUploadError('Please select a valid PDF file.');
       setSelectedFile(null);
@@ -73,18 +102,201 @@ const PDFUpload = ({ onUploadSuccess }) => {
     }
   };
 
+  // Calculate total pages based on page range and copies
+  const calculateTotalPages = (pageCount, copies, pageRange, customPageRange) => {
+    console.log('Calculating total pages with:', { pageCount, copies, pageRange, customPageRange });
+    
+    // Handle invalid inputs
+    if (!pageCount || pageCount <= 0) {
+      console.warn('Invalid page count for calculation:', pageCount);
+      return copies || 1; // Return at least the number of copies
+    }
+    
+    if (!copies || copies <= 0) {
+      console.warn('Invalid copies count for calculation:', copies);
+      return pageCount; // Return at least the page count
+    }
+    
+    let pagesToPrint = 0;
+    
+    if (pageRange === 'all') {
+      pagesToPrint = pageCount;
+      console.log(`All pages selected: ${pagesToPrint} pages`);
+    } else if (pageRange === 'custom' && customPageRange) {
+      // Parse custom page range (e.g., "1-3, 5, 7-9")
+      try {
+        const ranges = customPageRange.split(',').map(range => range.trim());
+        let selectedPages = new Set();
+        
+        ranges.forEach(range => {
+          if (range.includes('-')) {
+            // Handle range like "1-5"
+            const [start, end] = range.split('-').map(num => parseInt(num.trim(), 10));
+            if (!isNaN(start) && !isNaN(end)) {
+              for (let i = start; i <= end && i <= pageCount; i++) {
+                selectedPages.add(i);
+              }
+            }
+          } else {
+            // Handle single page like "7"
+            const page = parseInt(range, 10);
+            if (!isNaN(page) && page <= pageCount) {
+              selectedPages.add(page);
+            }
+          }
+        });
+        
+        pagesToPrint = selectedPages.size;
+        
+        // If no valid pages were selected, default to all pages
+        if (pagesToPrint === 0) {
+          pagesToPrint = pageCount;
+          console.log(`No valid pages in custom range, defaulting to all pages: ${pagesToPrint}`);
+        } else {
+          console.log(`Custom page range parsed: ${pagesToPrint} pages selected`);
+        }
+      } catch (error) {
+        console.error('Error parsing custom page range:', error);
+        pagesToPrint = pageCount; // Default to all pages if parsing fails
+        console.log(`Defaulting to all pages (${pagesToPrint}) due to parsing error`);
+      }
+    } else {
+      // Default to all pages if no valid selection
+      pagesToPrint = pageCount;
+      console.log(`No valid page range selection, defaulting to all pages: ${pagesToPrint}`);
+    }
+    
+    const totalPages = pagesToPrint * copies;
+    console.log(`Final calculation: ${pagesToPrint} pages × ${copies} copies = ${totalPages} total pages`);
+    
+    return totalPages;
+  };
+  
+  // Update total pages whenever relevant settings change
+  const updateTotalPages = (pageCount, copies, pageRange, customPageRange) => {
+    console.log('Updating total pages with:', { pageCount, copies, pageRange, customPageRange });
+    
+    // Ensure we have valid values
+    const validPageCount = pageCount > 0 ? pageCount : (numPages > 0 ? numPages : 1);
+    const validCopies = copies > 0 ? copies : 1;
+    
+    const total = calculateTotalPages(validPageCount, validCopies, pageRange, customPageRange);
+    console.log(`Total pages calculated: ${total}`);
+    
+    // Update state
+    setTotalPagesToProcess(total);
+    setPrintSettings(prev => ({
+      ...prev,
+      totalPages: total
+    }));
+    
+    return total;
+  };
+
   // On document load success
-  const onDocumentLoadSuccess = ({ numPages }) => {
-    setNumPages(numPages);
+  const onDocumentLoadSuccess = ({ numPages: loadedPages }) => {
+    console.log(`PDF document loaded successfully. Pages: ${loadedPages}`);
+    
+    // Only update if the loaded page count is different from current
+    if (loadedPages !== numPages) {
+      setNumPages(loadedPages);
+      
+      // Update total pages in print settings
+      updateTotalPages(
+        loadedPages,
+        printSettings.copies,
+        printSettings.pageRange,
+        printSettings.customPageRange
+      );
+      
+      // If using custom page range but it's empty, set a default range
+      if (printSettings.pageRange === 'custom' && 
+          (!printSettings.customPageRange || printSettings.customPageRange.trim() === '')) {
+        const defaultRange = `1-${loadedPages}`;
+        console.log(`Setting default custom page range: ${defaultRange}`);
+        
+        setPrintSettings(prev => ({
+          ...prev,
+          customPageRange: defaultRange
+        }));
+      }
+    }
   };
 
   // Handle printing settings change
   const handleSettingsChange = (event) => {
     const { name, value, checked, type } = event.target;
-    setPrintSettings(prev => ({
-      ...prev,
-      [name]: type === 'checkbox' ? checked : value
-    }));
+    const newValue = type === 'checkbox' ? checked : value;
+    
+    // Special handling for page range changes
+    if (name === 'pageRange') {
+      console.log(`Page range changed to: ${value}`);
+      
+      // Update settings first
+      setPrintSettings(prev => ({
+        ...prev,
+        [name]: newValue
+      }));
+      
+      // Then recalculate total pages
+      setTimeout(() => {
+        updateTotalPages(
+          numPages,
+          printSettings.copies,
+          value, // Use the new value directly
+          printSettings.customPageRange
+        );
+      }, 0);
+      
+      return;
+    }
+    
+    // Special handling for custom page range changes
+    if (name === 'customPageRange') {
+      console.log(`Custom page range changed to: ${value}`);
+      
+      // Update settings first
+      setPrintSettings(prev => ({
+        ...prev,
+        [name]: newValue
+      }));
+      
+      // Then recalculate total pages if we're in custom page range mode
+      if (printSettings.pageRange === 'custom') {
+        setTimeout(() => {
+          updateTotalPages(
+            numPages,
+            printSettings.copies,
+            printSettings.pageRange,
+            value // Use the new value directly
+          );
+        }, 0);
+      }
+      
+      return;
+    }
+    
+    // Default handling for other settings
+    setPrintSettings(prev => {
+      const updatedSettings = {
+        ...prev,
+        [name]: newValue
+      };
+      
+      // Recalculate total pages when copies change
+      if (name === 'copies') {
+        setTimeout(() => {
+          updateTotalPages(
+            numPages, 
+            newValue, // Use the new value directly
+            prev.pageRange,
+            prev.customPageRange
+          );
+        }, 0);
+      }
+      
+      return updatedSettings;
+    });
   };
 
   // Handle upload
@@ -106,6 +318,9 @@ const PDFUpload = ({ onUploadSuccess }) => {
       Object.keys(printSettings).forEach(key => {
         formData.append(key, printSettings[key]);
       });
+      
+      // Add total pages to formData
+      formData.append('totalPages', totalPagesToProcess);
 
       const response = await printAPI.uploadPDF(formData, (progressEvent) => {
         const progress = Math.round((progressEvent.loaded * 100) / progressEvent.total);
@@ -160,6 +375,19 @@ const PDFUpload = ({ onUploadSuccess }) => {
       }
     };
   }, [filePreview]);
+
+  // Effect to ensure page count is properly initialized
+  useEffect(() => {
+    if (numPages > 0 && totalPagesToProcess === 0) {
+      console.log('Initializing total pages calculation with current page count:', numPages);
+      updateTotalPages(
+        numPages,
+        printSettings.copies,
+        printSettings.pageRange,
+        printSettings.customPageRange
+      );
+    }
+  }, [numPages, totalPagesToProcess, printSettings.copies, printSettings.pageRange, printSettings.customPageRange]);
 
   // Helper function to download PDF directly
   const handleDownloadPDF = () => {
@@ -396,7 +624,21 @@ const PDFUpload = ({ onUploadSuccess }) => {
                   name="customPageRange"
                   value={printSettings.customPageRange}
                   onChange={handleSettingsChange}
-                  helperText="e.g., 1-3, 5, 7-9"
+                  helperText={`e.g., 1-3, 5, 7-9 (max pages: ${numPages || '?'})`}
+                  error={printSettings.customPageRange.trim() === ''}
+                  placeholder="Enter page numbers or ranges"
+                  onBlur={() => {
+                    // Validate and recalculate on blur
+                    if (printSettings.pageRange === 'custom' && printSettings.customPageRange.trim() === '') {
+                      // If empty, set a default value
+                      const defaultRange = numPages > 0 ? `1-${numPages}` : '1';
+                      setPrintSettings(prev => ({
+                        ...prev,
+                        customPageRange: defaultRange
+                      }));
+                      updateTotalPages(numPages, printSettings.copies, 'custom', defaultRange);
+                    }
+                  }}
                 />
               </Grid>
             )}
@@ -462,6 +704,36 @@ const PDFUpload = ({ onUploadSuccess }) => {
                 />
               </FormGroup>
             </Grid>
+
+            {/* Display total pages calculation */}
+            <Grid item xs={12}>
+              <Box sx={{ 
+                p: 2, 
+                bgcolor: '#f5f5f5', 
+                borderRadius: 1,
+                border: '1px dashed #ccc',
+                mt: 2 
+              }}>
+                <Typography variant="subtitle1" fontWeight="medium" gutterBottom>
+                  Print Summary
+                </Typography>
+                <Typography variant="body2">
+                  Total document pages: {numPages > 0 ? numPages : 'Unknown'}
+                </Typography>
+                <Typography variant="body2">
+                  Pages to print: {printSettings.pageRange === 'all' ? 
+                    `All (${numPages > 0 ? numPages : 'Unknown'})` : 
+                    `Custom (${totalPagesToProcess > 0 ? Math.ceil(totalPagesToProcess / printSettings.copies) : 'Unknown'})`}
+                </Typography>
+                <Typography variant="body2">
+                  Number of copies: {printSettings.copies}
+                </Typography>
+                <Typography variant="body1" fontWeight="medium" mt={1}>
+                  Total pages to process: {totalPagesToProcess > 0 ? totalPagesToProcess : 
+                    (numPages > 0 ? numPages * printSettings.copies : 'Unknown')}
+                </Typography>
+              </Box>
+            </Grid>
           </Grid>
         </DialogContent>
         <DialogActions>
@@ -469,6 +741,24 @@ const PDFUpload = ({ onUploadSuccess }) => {
           <Button 
             variant="contained" 
             onClick={() => {
+              // Ensure calculations are up-to-date before closing
+              if (printSettings.pageRange === 'custom' && printSettings.customPageRange.trim() === '') {
+                // If empty, set a default value
+                const defaultRange = numPages > 0 ? `1-${numPages}` : '1';
+                setPrintSettings(prev => ({
+                  ...prev,
+                  customPageRange: defaultRange
+                }));
+                updateTotalPages(numPages, printSettings.copies, 'custom', defaultRange);
+              } else {
+                // Force recalculation one more time
+                updateTotalPages(
+                  numPages,
+                  printSettings.copies,
+                  printSettings.pageRange,
+                  printSettings.customPageRange
+                );
+              }
               setShowSettings(false);
             }}
           >

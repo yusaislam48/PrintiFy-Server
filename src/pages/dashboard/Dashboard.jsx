@@ -897,6 +897,41 @@ const Dashboard = () => {
                   {formatDate(selectedJob.createdAt)}
                 </Typography>
               </Grid>
+              
+              {/* Total Pages Summary */}
+              <Grid item xs={12}>
+                <Box sx={{ 
+                  p: 2, 
+                  bgcolor: '#f5f5f5', 
+                  borderRadius: 1,
+                  border: '1px dashed #ccc',
+                  mt: 1 
+                }}>
+                  <Typography variant="subtitle2" fontWeight="medium" gutterBottom>
+                    Print Summary
+                  </Typography>
+                  <Grid container spacing={1}>
+                    <Grid item xs={6}>
+                      <Typography variant="body2" color="text.secondary">
+                        Total Pages:
+                      </Typography>
+                      <Typography variant="body1" fontWeight="medium">
+                        {selectedJob.printSettings?.totalPages > 0 
+                          ? selectedJob.printSettings.totalPages 
+                          : (selectedJob.printSettings?.copies || 1) + ' copy/copies'}
+                      </Typography>
+                    </Grid>
+                    <Grid item xs={6}>
+                      <Typography variant="body2" color="text.secondary">
+                        Estimated Cost:
+                      </Typography>
+                      <Typography variant="body1" fontWeight="medium" color="primary.main">
+                        ${((selectedJob.printSettings?.totalPages || 0) * 0.10).toFixed(2)}
+                      </Typography>
+                    </Grid>
+                  </Grid>
+                </Box>
+              </Grid>
             </Grid>
           )}
         </DialogContent>
