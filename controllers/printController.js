@@ -365,6 +365,18 @@ exports.markPrintJobAsCompleted = async (req, res) => {
     printJob.status = 'completed';
     await printJob.save();
     
+    // Delete the file from Cloudinary
+    try {
+      if (printJob.cloudinaryPublicId) {
+        console.log(`Attempting to delete file from Cloudinary: ${printJob.cloudinaryPublicId}`);
+        await cloudinary.uploader.destroy(printJob.cloudinaryPublicId, { resource_type: 'raw' });
+        console.log(`Successfully deleted file from Cloudinary: ${printJob.cloudinaryPublicId}`);
+      }
+    } catch (deleteError) {
+      console.error(`Error deleting file from Cloudinary: ${deleteError.message}`);
+      // Continue with the response even if file deletion fails
+    }
+    
     return res.status(200).json({
       message: 'Print job completed successfully',
       printJob: {
