@@ -4,6 +4,7 @@ import { createTheme, ThemeProvider, CssBaseline } from '@mui/material'
 import Login from './pages/auth/Login'
 import Register from './pages/auth/Register'
 import Dashboard from './pages/dashboard/Dashboard'
+import PrintHub from './pages/printing/PrintHub'
 import './App.css'
 
 // Protected route component
@@ -92,6 +93,7 @@ function App() {
         <Routes>
           <Route path="/login" element={<Login />} />
           <Route path="/register" element={<Register />} />
+          <Route path="/print-hub" element={<PrintHub />} />
           <Route 
             path="/dashboard" 
             element={

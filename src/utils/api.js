@@ -214,4 +214,150 @@ export const userAPI = {
   },
 };
 
+// Print API calls
+export const printAPI = {
+  // Upload PDF file to Cloudinary with print settings
+  uploadPDF: async (formData, onUploadProgress) => {
+    try {
+      // Create a custom instance for file upload with multipart/form-data
+      const uploadInstance = axios.create({
+        baseURL: 'http://localhost:8080/api',
+        headers: {
+          'Content-Type': 'multipart/form-data',
+          'Authorization': `Bearer ${getToken()}`
+        }
+      });
+      
+      const response = await uploadInstance.post('/print/upload', formData, {
+        onUploadProgress
+      });
+      
+      return response.data;
+    } catch (error) {
+      console.error('PDF Upload Error:', error);
+      throw error.response?.data || { message: 'Failed to upload PDF' };
+    }
+  },
+  
+  // Get all print jobs for current user
+  getUserPrintJobs: async () => {
+    try {
+      const response = await api.get('/print/jobs');
+      return response.data;
+    } catch (error) {
+      throw error.response?.data || { message: 'Failed to get print jobs' };
+    }
+  },
+  
+  // Get a specific print job
+  getPrintJob: async (jobId) => {
+    try {
+      const response = await api.get(`/print/jobs/${jobId}`);
+      return response.data;
+    } catch (error) {
+      throw error.response?.data || { message: 'Failed to get print job' };
+    }
+  },
+  
+  // Cancel a print job
+  cancelPrintJob: async (jobId) => {
+    try {
+      const response = await api.post(`/print/jobs/${jobId}/cancel`);
+      return response.data;
+    } catch (error) {
+      throw error.response?.data || { message: 'Failed to cancel print job' };
+    }
+  },
+  
+  // Download a PDF file directly
+  downloadPDF: async (jobId) => {
+    try {
+      const response = await api.get(`/print/download/${jobId}`, {
+        responseType: 'blob'
+      });
+      return response.data;
+    } catch (error) {
+      console.error('PDF Download Error:', error);
+      throw error.response?.data || { message: 'Failed to download PDF' };
+    }
+  }
+};
+
+// Utility function to handle API errors
+const handleApiError = (error) => {
+  if (error.response) {
+    // The server responded with an error status
+    return error.response.data || { message: 'Server error occurred' };
+  } else if (error.request) {
+    // The request was made but no response was received
+    return { message: 'No response from server. Please check your connection.' };
+  } else {
+    // Something else happened in setting up the request
+    return { message: error.message || 'An error occurred' };
+  }
+};
+
+// Print Hub API
+export const printHubAPI = {
+  // Find print jobs by student ID (public)
+  findPrintJobsByStudentId: async (studentId) => {
+    try {
+      const response = await axios.get(`http://localhost:8080/api/print/public/jobs/student/${studentId}`);
+      return response.data;
+    } catch (error) {
+      throw handleApiError(error);
+    }
+  },
+  
+  // Mark a print job as completed (public)
+  markPrintJobAsCompleted: async (jobId) => {
+    try {
+      const response = await axios.post(`http://localhost:8080/api/print/public/jobs/${jobId}/complete`);
+      return response.data;
+    } catch (error) {
+      throw handleApiError(error);
+    }
+  },
+  
+  // Get direct PDF view URL
+  getDirectPdfUrl: (jobId) => {
+    if (!jobId) {
+      console.error('Missing job ID for PDF view URL');
+      return '';
+    }
+    console.log(`Creating direct PDF URL for job: ${jobId}`);
+    // Add a timestamp parameter to prevent caching
+    return `http://localhost:8080/api/print/public/view/${jobId}?t=${Date.now()}`;
+  },
+
+  // Test PDF view URL directly
+  testPdfViewEndpoint: async (jobId) => {
+    if (!jobId) {
+      console.error('Missing job ID for PDF test');
+      return { success: false, message: 'Missing job ID' };
+    }
+    
+    try {
+      const url = `http://localhost:8080/api/print/public/view/${jobId}`;
+      console.log(`Testing PDF URL: ${url}`);
+      
+      // Make a HEAD request first to check if the endpoint is accessible
+      const response = await axios.head(url);
+      return { 
+        success: true, 
+        status: response.status,
+        message: 'PDF endpoint is working'
+      };
+    } catch (error) {
+      console.error('PDF endpoint test failed:', error);
+      return { 
+        success: false, 
+        status: error.response?.status,
+        message: error.message,
+        details: error.response?.data || 'No details available'
+      };
+    }
+  }
+};
+
 export default api; 

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   Box,
@@ -12,6 +12,7 @@ import {
   Stack,
   Alert,
   CircularProgress,
+  InputAdornment,
 } from '@mui/material';
 import { GitHub as GitHubIcon, Google as GoogleIcon } from '@mui/icons-material';
 import { authAPI } from '../../utils/api';
@@ -20,25 +21,38 @@ const Register = () => {
   const navigate = useNavigate();
   const [formData, setFormData] = useState({
     name: '',
+    studentId: '',
     email: '',
+    phone: '',
     password: '',
     confirmPassword: '',
   });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
+  // Update email when student ID changes
+  useEffect(() => {
+    if (formData.studentId) {
+      setFormData(prevData => ({
+        ...prevData,
+        email: `${formData.studentId}@iub.edu.bd`
+      }));
+    }
+  }, [formData.studentId]);
+
   const handleChange = (e) => {
-    setFormData({
-      ...formData,
-      [e.target.name]: e.target.value,
-    });
+    const { name, value } = e.target;
+    setFormData(prevData => ({
+      ...prevData,
+      [name]: value,
+    }));
   };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     
     // Basic validation
-    if (!formData.name || !formData.email || !formData.password) {
+    if (!formData.name || !formData.studentId || !formData.password || !formData.phone) {
       setError('Please fill in all required fields');
       return;
     }
@@ -52,22 +66,31 @@ const Register = () => {
       setError('Password must be at least 6 characters');
       return;
     }
+
+    // Phone validation (simple check for numeric and length)
+    if (!/^\d{11}$/.test(formData.phone)) {
+      setError('Phone number must be 11 digits');
+      return;
+    }
     
     setLoading(true);
     setError('');
     
     try {
-      console.log('Registration attempt with:', { email: formData.email, name: formData.name });
-      
-      // Log the full request URL for debugging
-      console.log('Request URL:', 'http://localhost:8080/api/auth/register');
+      console.log('Registration attempt with:', { 
+        email: formData.email, 
+        name: formData.name,
+        studentId: formData.studentId,
+        phone: formData.phone 
+      });
       
       const data = await authAPI.register({
         name: formData.name,
         email: formData.email,
+        studentId: formData.studentId,
+        phone: formData.phone,
         password: formData.password,
       });
-      console.log('Registration response:', data);
       
       // Store token in localStorage
       localStorage.setItem('token', data.token);
@@ -120,7 +143,7 @@ const Register = () => {
           </Typography>
           
           <Typography variant="body1" color="text.secondary" gutterBottom>
-            Enter your email below to create your account
+            Enter your details below to create your account
           </Typography>
           
           {error && <Alert severity="error">{error}</Alert>}
@@ -153,7 +176,7 @@ const Register = () => {
           </Box>
           
           <Typography variant="subtitle1" fontWeight="medium">
-            Name
+            Full Name
           </Typography>
           <TextField
             fullWidth
@@ -172,15 +195,63 @@ const Register = () => {
           />
           
           <Typography variant="subtitle1" fontWeight="medium">
+            Student ID
+          </Typography>
+          <TextField
+            fullWidth
+            name="studentId"
+            placeholder="2030576"
+            variant="outlined"
+            size="medium"
+            value={formData.studentId}
+            onChange={handleChange}
+            sx={{ 
+              mt: -1,
+              '& .MuiOutlinedInput-root': {
+                borderRadius: '8px',
+              }
+            }}
+          />
+          
+          <Typography variant="subtitle1" fontWeight="medium">
             Email
           </Typography>
           <TextField
             fullWidth
             name="email"
-            placeholder="m@example.com"
             variant="outlined"
             size="medium"
             value={formData.email}
+            disabled
+            InputProps={{
+              readOnly: true,
+              endAdornment: (
+                <InputAdornment position="end">
+                  <Typography variant="caption" color="text.secondary">
+                    Auto-generated
+                  </Typography>
+                </InputAdornment>
+              ),
+            }}
+            sx={{ 
+              mt: -1,
+              '& .MuiOutlinedInput-root': {
+                borderRadius: '8px',
+                bgcolor: 'rgba(0, 0, 0, 0.04)',
+              }
+            }}
+          />
+          
+          <Typography variant="subtitle1" fontWeight="medium">
+            Phone Number
+          </Typography>
+          <TextField
+            fullWidth
+            name="phone"
+            placeholder="01711223344"
+            variant="outlined"
+            size="medium"
+            value={formData.phone}
             onChange={handleChange}
             sx={{ 
               mt: -1,
