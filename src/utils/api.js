@@ -200,11 +200,21 @@ export const authAPI = {
     }
   },
 
-  // Get current user profile
+  // Get current user data
   getCurrentUser: async () => {
     try {
       const response = await api.get('/auth/me');
-      return response.data;
+      return {
+        id: response.data._id,
+        name: response.data.name,
+        email: response.data.email,
+        studentId: response.data.studentId,
+        role: response.data.role,
+        phone: response.data.phone,
+        profilePicture: response.data.profilePicture,
+        points: response.data.points || 0, // Include points in user data
+        isVerified: response.data.isVerified
+      };
     } catch (error) {
       throw error.response?.data || { message: 'Failed to get user data' };
     }
@@ -362,25 +372,33 @@ const handleApiError = (error) => {
   }
 };
 
-// Print Hub API
+// Print Hub API calls (admin/staff endpoints)
 export const printHubAPI = {
-  // Find print jobs by student ID (public)
+  // Find print jobs by student ID
   findPrintJobsByStudentId: async (studentId) => {
     try {
-      const response = await axios.get(`http://localhost:8080/api/print/public/jobs/student/${studentId}`);
-      return response.data;
+      const response = await api.get(`/print/public/jobs/student/${studentId}`);
+      return {
+        studentName: response.data.studentName,
+        pendingPrintJobs: response.data.pendingPrintJobs,
+        userPoints: response.data.userPoints || 0 // Include user points in response
+      };
     } catch (error) {
-      throw handleApiError(error);
+      throw error;
     }
   },
-  
-  // Mark a print job as completed (public)
+
+  // Mark a print job as completed
   markPrintJobAsCompleted: async (jobId) => {
     try {
-      const response = await axios.post(`http://localhost:8080/api/print/public/jobs/${jobId}/complete`);
-      return response.data;
+      const response = await api.post(`/print/public/jobs/${jobId}/complete`);
+      return {
+        message: response.data.message,
+        printJob: response.data.printJob,
+        user: response.data.user // Will include updated user points
+      };
     } catch (error) {
-      throw handleApiError(error);
+      throw error;
     }
   },
   

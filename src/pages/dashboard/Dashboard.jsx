@@ -87,6 +87,7 @@ const Dashboard = () => {
   const [pdfLoading, setPdfLoading] = useState(false);
   const [pdfPreviewOpen, setPdfPreviewOpen] = useState(false);
   const [previewUrl, setPreviewUrl] = useState('');
+  const [pointHistory, setPointHistory] = useState([]);
 
   // Update the useEffect hooks to fetch user data and print jobs on initial load
   useEffect(() => {
@@ -340,6 +341,40 @@ const Dashboard = () => {
     }, 1000);
   };
 
+  // Add this function to calculate completed jobs and points used
+  const calculatePointsStatistics = () => {
+    if (!printJobs || printJobs.length === 0) {
+      return { 
+        totalPointsUsed: 0, 
+        completedJobs: 0,
+        pendingJobs: 0,
+        pointsPerJob: [] 
+      };
+    }
+
+    const completedJobs = printJobs.filter(job => job.status === 'completed');
+    const pendingJobs = printJobs.filter(job => job.status === 'pending');
+    
+    const totalPointsUsed = completedJobs.reduce((total, job) => {
+      return total + (job.pointsUsed || job.printSettings.totalPages || 0);
+    }, 0);
+
+    // Create point history entries
+    const pointsPerJob = completedJobs.map(job => ({
+      id: job._id,
+      date: job.updatedAt,
+      fileName: job.fileName,
+      pointsUsed: job.pointsUsed || job.printSettings.totalPages || 0
+    }));
+
+    return { 
+      totalPointsUsed, 
+      completedJobs: completedJobs.length,
+      pendingJobs: pendingJobs.length,
+      pointsPerJob 
+    };
+  };
+
   if (loading) {
     return (
       <Box
@@ -490,166 +525,151 @@ const Dashboard = () => {
 
           {/* Dashboard Tab */}
           <TabPanel value={tabValue} index={0}>
-          <Typography variant="h4" sx={{ mb: 3 }}>
-            Welcome, {user?.name || 'User'}!
-          </Typography>
+            <Typography variant="h4" sx={{ mb: 3 }}>
+              Welcome, {user?.name || 'User'}!
+            </Typography>
 
-          <Grid container spacing={3}>
-            {/* Stats Cards */}
-            <Grid item xs={12} md={4}>
-              <Card sx={{ height: '100%' }}>
-                <CardContent>
-                  <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
-                    <PrintIcon color="primary" sx={{ mr: 1 }} />
-                    <Typography variant="h6">Print Jobs</Typography>
-                  </Box>
-                  <Typography variant="h3" sx={{ fontWeight: 'bold', mb: 1 }}>
-                      {printJobs.length || '0'}
-                  </Typography>
-                  <Typography variant="body2" color="text.secondary">
-                      {printJobs.filter(job => job.status === 'pending' || job.status === 'processing').length} in progress, 
-                      {' '}{printJobs.filter(job => job.status === 'completed').length} completed
-                  </Typography>
-                </CardContent>
-              </Card>
-            </Grid>
-
-            <Grid item xs={12} md={4}>
-              <Card sx={{ height: '100%' }}>
-                <CardContent>
-                  <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
-                    <DescriptionIcon color="primary" sx={{ mr: 1 }} />
-                    <Typography variant="h6">Templates</Typography>
-                  </Box>
-                  <Typography variant="h3" sx={{ fontWeight: 'bold', mb: 1 }}>
-                    5
-                  </Typography>
-                  <Typography variant="body2" color="text.secondary">
-                    2 custom, 3 from library
-                  </Typography>
-                </CardContent>
-              </Card>
-            </Grid>
-
-            <Grid item xs={12} md={4}>
-              <Card sx={{ height: '100%' }}>
-                <CardContent>
-                  <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
-                    <HistoryIcon color="primary" sx={{ mr: 1 }} />
-                    <Typography variant="h6">Print History</Typography>
-                  </Box>
-                  <Typography variant="h3" sx={{ fontWeight: 'bold', mb: 1 }}>
-                      {printJobs.filter(job => job.status === 'completed').length}
-                  </Typography>
-                  <Typography variant="body2" color="text.secondary">
-                      Last print: {printJobs.length > 0 ? formatDate(printJobs[0].createdAt) : 'No prints yet'}
-                  </Typography>
-                </CardContent>
-              </Card>
-            </Grid>
-
-            {/* Quick Actions */}
-            <Grid item xs={12}>
-              <Paper sx={{ p: 3, mt: 3 }}>
-                <Typography variant="h5" sx={{ mb: 2 }}>
-                  Quick Actions
-                </Typography>
-                <Grid container spacing={2}>
-                  <Grid item xs={12} sm={6} md={3}>
-                    <Button
-                      variant="contained"
-                      startIcon={<PrintIcon />}
-                      fullWidth
-                      sx={{ py: 1.5, textTransform: 'none' }}
-                        onClick={() => setTabValue(1)}
-                    >
-                      New Print Job
-                    </Button>
-                  </Grid>
-                  <Grid item xs={12} sm={6} md={3}>
-                    <Button
-                      variant="outlined"
-                      startIcon={<DescriptionIcon />}
-                      fullWidth
-                      sx={{ py: 1.5, textTransform: 'none' }}
-                    >
-                      Create Template
-                    </Button>
-                  </Grid>
-                  <Grid item xs={12} sm={6} md={3}>
-                    <Button
-                      variant="outlined"
-                      startIcon={<HistoryIcon />}
-                      fullWidth
-                      sx={{ py: 1.5, textTransform: 'none' }}
-                    >
-                      View History
-                    </Button>
-                  </Grid>
-                  <Grid item xs={12} sm={6} md={3}>
-                    <Button
-                      variant="outlined"
-                      startIcon={<SettingsIcon />}
-                      fullWidth
-                      sx={{ py: 1.5, textTransform: 'none' }}
-                    >
-                      Settings
-                    </Button>
-                  </Grid>
-                </Grid>
-              </Paper>
-            </Grid>
-
-            {/* Recent Activity */}
-            <Grid item xs={12}>
-              <Paper sx={{ p: 3, mt: 3 }}>
-                <Typography variant="h5" sx={{ mb: 2 }}>
-                  Recent Activity
-                </Typography>
-                <List>
-                    {printJobs.slice(0, 3).map((job) => (
-                      <ListItem key={job._id} divider>
-                    <ListItemIcon>
-                      <PrintIcon color="primary" />
-                    </ListItemIcon>
-                    <ListItemText
-                          primary={job.fileName}
-                          secondary={formatDate(job.createdAt)}
-                        />
-                        <Typography 
-                          variant="body2" 
-                          sx={{ 
-                            textTransform: 'capitalize', 
-                            color: getStatusColor(job.status),
-                            fontWeight: 'medium'
-                          }}
-                        >
-                          {job.status}
-                        </Typography>
-                  </ListItem>
-                    ))}
-                    {printJobs.length === 0 && (
-                  <ListItem>
-                    <ListItemText
-                          primary="No print jobs yet"
-                          secondary={
-                            <Button 
-                              variant="text" 
-                              color="primary"
-                              sx={{ mt: 1, pl: 0 }}
-                              onClick={() => setTabValue(1)}
-                              startIcon={<FileUploadIcon />}
-                            >
-                              Upload a PDF to start printing
-                            </Button>
-                          }
+            <Grid container spacing={3}>
+              {/* User Info Card */}
+              <Grid item xs={12} md={4}>
+                <Paper elevation={2} sx={{ p: 3, height: '100%' }}>
+                  <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', mb: 2 }}>
+                    <Avatar
+                      src={user?.profilePicture || ''}
+                      alt={user?.name}
+                      sx={{ width: 100, height: 100, mb: 2 }}
                     />
-                  </ListItem>
-                    )}
-                </List>
-              </Paper>
+                    <Typography variant="h5" gutterBottom>
+                      {user?.name}
+                    </Typography>
+                    <Typography variant="body1" color="textSecondary" gutterBottom>
+                      {user?.email}
+                    </Typography>
+                    <Typography variant="body2" color="textSecondary">
+                      Student ID: {user?.studentId}
+                    </Typography>
+                    <Typography variant="body2" color="textSecondary">
+                      Phone: {user?.phone}
+                    </Typography>
+                    
+                    {/* Add Points Display Here */}
+                    <Box sx={{ 
+                      mt: 2, 
+                      p: 2, 
+                      bgcolor: 'primary.light', 
+                      color: 'primary.contrastText',
+                      borderRadius: 2,
+                      width: '100%',
+                      textAlign: 'center'
+                    }}>
+                      <Typography variant="h6" gutterBottom>
+                        Available Points
+                      </Typography>
+                      <Typography variant="h3" fontWeight="bold">
+                        {user?.points || 0}
+                      </Typography>
+                    </Box>
+                  </Box>
+                </Paper>
+              </Grid>
+
+              {/* Print Stats Card */}
+              <Grid item xs={12} md={8}>
+                <Paper elevation={2} sx={{ p: 3, height: '100%' }}>
+                  <Typography variant="h6" gutterBottom>
+                    Printing Statistics
+                  </Typography>
+                  
+                  {jobsLoading ? (
+                    <Box sx={{ display: 'flex', justifyContent: 'center', p: 3 }}>
+                      <CircularProgress />
+                    </Box>
+                  ) : (
+                    <Grid container spacing={3}>
+                      <Grid item xs={12} sm={6} md={3}>
+                        <Card sx={{ bgcolor: 'info.light', color: 'info.contrastText' }}>
+                          <CardContent>
+                            <Typography variant="h5">{printJobs.length}</Typography>
+                            <Typography variant="body2">Total Print Jobs</Typography>
+                          </CardContent>
+                        </Card>
+                      </Grid>
+                      
+                      <Grid item xs={12} sm={6} md={3}>
+                        <Card sx={{ bgcolor: 'warning.light', color: 'warning.contrastText' }}>
+                          <CardContent>
+                            <Typography variant="h5">
+                              {calculatePointsStatistics().pendingJobs}
+                            </Typography>
+                            <Typography variant="body2">Pending Jobs</Typography>
+                          </CardContent>
+                        </Card>
+                      </Grid>
+                      
+                      <Grid item xs={12} sm={6} md={3}>
+                        <Card sx={{ bgcolor: 'success.light', color: 'success.contrastText' }}>
+                          <CardContent>
+                            <Typography variant="h5">
+                              {calculatePointsStatistics().completedJobs}
+                            </Typography>
+                            <Typography variant="body2">Completed Jobs</Typography>
+                          </CardContent>
+                        </Card>
+                      </Grid>
+                      
+                      <Grid item xs={12} sm={6} md={3}>
+                        <Card sx={{ bgcolor: 'error.light', color: 'error.contrastText' }}>
+                          <CardContent>
+                            <Typography variant="h5">
+                              {calculatePointsStatistics().totalPointsUsed}
+                            </Typography>
+                            <Typography variant="body2">Points Used</Typography>
+                          </CardContent>
+                        </Card>
+                      </Grid>
+                    </Grid>
+                  )}
+                </Paper>
+              </Grid>
+              
+              {/* Points History Card */}
+              <Grid item xs={12}>
+                <Paper elevation={2} sx={{ p: 3 }}>
+                  <Typography variant="h6" gutterBottom>
+                    Points History
+                  </Typography>
+                  
+                  {jobsLoading ? (
+                    <Box sx={{ display: 'flex', justifyContent: 'center', p: 3 }}>
+                      <CircularProgress />
+                    </Box>
+                  ) : calculatePointsStatistics().pointsPerJob.length > 0 ? (
+                    <Table size="small">
+                      <TableHead>
+                        <TableRow>
+                          <TableCell>Date</TableCell>
+                          <TableCell>File Name</TableCell>
+                          <TableCell align="right">Points Used</TableCell>
+                        </TableRow>
+                      </TableHead>
+                      <TableBody>
+                        {calculatePointsStatistics().pointsPerJob.map((job) => (
+                          <TableRow key={job.id}>
+                            <TableCell>{formatDate(job.date)}</TableCell>
+                            <TableCell>{job.fileName}</TableCell>
+                            <TableCell align="right">{job.pointsUsed}</TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  ) : (
+                    <Typography variant="body2" color="textSecondary" sx={{ p: 2, textAlign: 'center' }}>
+                      No points history available
+                    </Typography>
+                  )}
+                </Paper>
+              </Grid>
             </Grid>
-          </Grid>
           </TabPanel>
 
           {/* Upload PDF Tab */}

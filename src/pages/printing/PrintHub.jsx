@@ -21,7 +21,8 @@ import {
   DialogTitle,
   DialogActions,
   useMediaQuery,
-  useTheme
+  useTheme,
+  Tooltip
 } from '@mui/material';
 import { 
   Search as SearchIcon, 
@@ -30,7 +31,9 @@ import {
   Close as CloseIcon,
   Download as DownloadIcon,
   OpenInNew as OpenInNewIcon,
-  FileDownload as FileDownloadIcon
+  FileDownload as FileDownloadIcon,
+  Warning as WarningIcon,
+  Info as InfoIcon
 } from '@mui/icons-material';
 import { printHubAPI } from '../../utils/api';
 
@@ -51,6 +54,9 @@ const PrintHub = () => {
   const [pdfLoading, setPdfLoading] = useState(false);
   const [previewUrl, setPreviewUrl] = useState('');
   const [selectedJob, setSelectedJob] = useState(null);
+  const [userPoints, setUserPoints] = useState(0);
+  const [successMessage, setSuccessMessage] = useState('');
+  const [errorMessage, setErrorMessage] = useState('');
 
   // Auto-search when studentId reaches 7 digits
   useEffect(() => {
@@ -77,6 +83,8 @@ const PrintHub = () => {
 
     setLoading(true);
     setError('');
+    setErrorMessage('');
+    setSuccessMessage('');
     
     try {
       const data = await printHubAPI.findPrintJobsByStudentId(studentId);
@@ -96,6 +104,7 @@ const PrintHub = () => {
       
       setPrintJobs(data.pendingPrintJobs || []);
       setStudentName(data.studentName || '');
+      setUserPoints(data.userPoints || 0);
       setSearchPerformed(true);
     } catch (err) {
       console.error('Error searching print jobs:', err);
@@ -121,7 +130,17 @@ const PrintHub = () => {
   // Mark a job as printed
   const markAsPrinted = async (jobId) => {
     try {
-      await printHubAPI.markPrintJobAsCompleted(jobId);
+      setErrorMessage('');
+      const job = printJobs.find(job => job._id === jobId);
+      const pointsNeeded = job?.pointsUsed || job?.printSettings?.totalPages || 0;
+      
+      // Check if user has enough points before sending request
+      if (userPoints < pointsNeeded) {
+        setErrorMessage(`Cannot complete print job. Student needs ${pointsNeeded} points but only has ${userPoints} points available.`);
+        return;
+      }
+      
+      const response = await printHubAPI.markPrintJobAsCompleted(jobId);
       
       // Update the UI to show it's printed
       setPrintJobs(prevJobs => 
@@ -129,12 +148,30 @@ const PrintHub = () => {
           job._id === jobId ? { ...job, status: 'completed' } : job
         )
       );
+      
+      // Update user points
+      if (response.user && response.user.points !== undefined) {
+        setUserPoints(response.user.points);
+      }
+      
+      // Show success message
+      setSuccessMessage(`Print job marked as completed. ${response.printJob.pointsUsed} points deducted.`);
+      setTimeout(() => setSuccessMessage(''), 5000);
     } catch (err) {
       console.error('Error marking job as printed:', err);
-      const errorMessage = err.response?.data?.message || 
-                          err.message || 
-                          'Failed to mark job as printed';
-      setError(errorMessage);
+      
+      // Handle specific error for not enough points
+      if (err.response?.data?.message === 'User does not have enough points') {
+        const required = err.response.data.required || 0;
+        const available = err.response.data.available || 0;
+        setErrorMessage(`Cannot complete print job. Student needs ${required} points but only has ${available} points available.`);
+      } else {
+        // General error
+        const errorMessage = err.response?.data?.message || 
+                            err.message || 
+                            'Failed to mark job as printed';
+        setErrorMessage(errorMessage);
+      }
     }
   };
 
@@ -222,6 +259,12 @@ const PrintHub = () => {
     }, 1000);
   };
 
+  // Check if a job can be printed (user has enough points)
+  const canPrintJob = (job) => {
+    const pointsNeeded = job?.pointsUsed || job?.printSettings?.totalPages || 0;
+    return userPoints >= pointsNeeded;
+  };
+
   return (
     <Container maxWidth="md" sx={{ py: 4 }}>
       <Paper elevation={1} sx={{ p: 4, borderRadius: 2, mb: 3 }}>
@@ -278,12 +321,45 @@ const PrintHub = () => {
                   Found {printJobs.length} pending print job(s) for {studentName}
                 </Alert>
                 
+                <Box sx={{ 
+                  display: 'flex', 
+                  alignItems: 'center', 
+                  mb: 2, 
+                  p: 2, 
+                  bgcolor: 'primary.light', 
+                  color: 'primary.contrastText',
+                  borderRadius: 1
+                }}>
+                  <Typography variant="h6" sx={{ mr: 1 }}>
+                    Available Points:
+                  </Typography>
+                  <Typography variant="h5" fontWeight="bold">
+                    {userPoints}
+                  </Typography>
+                </Box>
+                
+                {successMessage && (
+                  <Alert severity="success" sx={{ mb: 2 }}>
+                    {successMessage}
+                  </Alert>
+                )}
+                
+                {errorMessage && (
+                  <Alert severity="error" sx={{ mb: 2 }}>
+                    {errorMessage}
+                  </Alert>
+                )}
+                
                 <Typography variant="h5" gutterBottom sx={{ mt: 4, mb: 2 }}>
                   Pending Print Jobs
                 </Typography>
                 
                 <Grid container spacing={3}>
-                  {printJobs.map((job) => (
+                  {printJobs.map((job) => {
+                    const pointsNeeded = job.pointsUsed || job.printSettings?.totalPages || 0;
+                    const hasEnoughPoints = userPoints >= pointsNeeded;
+                    
+                    return (
                     <Grid item xs={12} key={job._id}>
                       <Card 
                         variant="outlined" 
@@ -314,35 +390,72 @@ const PrintHub = () => {
                           <Divider sx={{ my: 2 }} />
                           
                           <Grid container spacing={2}>
-                            <Grid item xs={12} sm={6}>
+                            <Grid item xs={12} sm={6} md={4}>
                               <Typography variant="body2">
                                 <strong>Copies:</strong> {job.printSettings?.copies || 1}
                               </Typography>
                               <Typography variant="body2">
                                 <strong>Paper Size:</strong> {(job.printSettings?.paperSize || 'a4').toUpperCase()}
                               </Typography>
+                              <Typography variant="body2">
+                                <strong>Layout:</strong> {(job.printSettings?.layout || 'portrait')}
+                              </Typography>
                             </Grid>
-                            <Grid item xs={12} sm={6}>
+                            <Grid item xs={12} sm={6} md={4}>
                               <Typography variant="body2">
                                 <strong>Color Mode:</strong> {job.printSettings?.colorMode === 'color' ? 'Color' : 'Black & White'}
                               </Typography>
                               <Typography variant="body2">
                                 <strong>Double-sided:</strong> {job.printSettings?.printBothSides ? 'Yes' : 'No'}
                               </Typography>
+                              <Typography variant="body2">
+                                <strong>Total Pages:</strong> {job.printSettings?.totalPages || 'N/A'}
+                              </Typography>
+                            </Grid>
+                            <Grid item xs={12} sm={12} md={4}>
+                              <Box sx={{ 
+                                p: 1.5, 
+                                bgcolor: hasEnoughPoints ? 'success.light' : 'error.light',
+                                borderRadius: 1,
+                                display: 'flex',
+                                flexDirection: 'column',
+                                alignItems: 'center',
+                                justifyContent: 'center'
+                              }}>
+                                <Typography variant="body2" fontWeight="bold" color={hasEnoughPoints ? 'success.dark' : 'error.dark'}>
+                                  Points Required:
+                                </Typography>
+                                <Typography variant="h5" fontWeight="bold" color={hasEnoughPoints ? 'success.dark' : 'error.dark'}>
+                                  {pointsNeeded}
+                                </Typography>
+                                {!hasEnoughPoints && (
+                                  <Box sx={{ display: 'flex', alignItems: 'center', mt: 1 }}>
+                                    <WarningIcon color="error" fontSize="small" sx={{ mr: 0.5 }} />
+                                    <Typography variant="caption" color="error.dark">
+                                      Not enough points
+                                    </Typography>
+                                  </Box>
+                                )}
+                              </Box>
                             </Grid>
                           </Grid>
                         </CardContent>
                         
                         <CardActions sx={{ px: 2, pb: 2 }}>
                           {job.status === 'pending' ? (
-                            <Button 
-                              variant="contained" 
-                              color="success"
-                              startIcon={<CheckCircleIcon />}
-                              onClick={() => markAsPrinted(job._id)}
-                            >
-                              Mark as Printed
-                            </Button>
+                            <Tooltip title={!hasEnoughPoints ? `Student needs ${pointsNeeded} points but only has ${userPoints}` : ""}>
+                              <span> {/* Wrapper needed for disabled buttons with Tooltip */}
+                                <Button 
+                                  variant="contained" 
+                                  color="success"
+                                  startIcon={<CheckCircleIcon />}
+                                  onClick={() => markAsPrinted(job._id)}
+                                  disabled={!hasEnoughPoints}
+                                >
+                                  Mark as Printed
+                                </Button>
+                              </span>
+                            </Tooltip>
                           ) : (
                             <Chip 
                               icon={<PrintIcon />} 
@@ -360,10 +473,16 @@ const PrintHub = () => {
                           >
                             View PDF
                           </Button>
+                          
+                          <Tooltip title="View print job details">
+                            <IconButton color="primary" sx={{ ml: 1 }}>
+                              <InfoIcon />
+                            </IconButton>
+                          </Tooltip>
                         </CardActions>
                       </Card>
                     </Grid>
-                  ))}
+                  )})}
                 </Grid>
               </>
             ) : (
