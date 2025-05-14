@@ -8,7 +8,8 @@ const {
   verifyEmail, 
   resendVerification,
   createTestUser,
-  resetPassword
+  resetPassword,
+  changePassword
 } = require('../controllers/authController');
 const { protect } = require('../middleware/authMiddleware');
 
@@ -29,6 +30,9 @@ router.post('/refresh', refreshToken);
 
 // Reset password (for fixing users with broken passwords)
 router.post('/reset-password', resetPassword);
+
+// Change password (protected route)
+router.post('/change-password', protect, changePassword);
 
 // Get current user (protected route)
 router.get('/me', protect, getCurrentUser);

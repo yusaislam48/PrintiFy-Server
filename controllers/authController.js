@@ -2,7 +2,7 @@ const jwt = require('jsonwebtoken');
 const User = require('../models/User');
 const PendingUser = require('../models/PendingUser');
 const jwtConfig = require('../config/jwt');
-const { generateVerificationCode, sendVerificationEmail } = require('../utils/emailService');
+const { generateVerificationCode, sendVerificationEmail, sendPasswordResetEmail } = require('../utils/emailService');
 
 // Generate JWT token
 const generateToken = (user) => {
@@ -580,11 +580,23 @@ exports.resetPassword = async (req, res) => {
     
     console.log('Password reset successful for user:', email);
     
+    // Try to send email with new password
+    const emailSent = await sendPasswordResetEmail(email, newPassword);
+    
+    if (!emailSent) {
+      console.warn('Failed to send password reset email to:', email);
+      return res.status(500).json({ 
+        message: 'Password was reset but we could not send the email. Please contact support.'
+      });
+    } else {
+      console.log('Password reset email sent successfully to:', email);
+    }
+    
     // Generate tokens
     const token = generateToken(user);
     const refreshToken = generateRefreshToken(user);
     
-    // Respond with tokens
+    // Respond with tokens but NOT the password
     res.json({
       _id: user._id,
       name: user.name,
@@ -592,10 +604,69 @@ exports.resetPassword = async (req, res) => {
       role: user.role,
       token,
       refreshToken,
-      message: 'Password reset successful'
+      emailSent,
+      message: 'Password reset successful. Check your email for the temporary password.'
     });
   } catch (error) {
     console.error('Password reset error:', error);
     res.status(500).json({ message: 'Password reset failed', error: error.message });
+  }
+};
+
+// @desc    Change user password
+// @route   POST /api/auth/change-password
+// @access  Private
+exports.changePassword = async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const { currentPassword, newPassword } = req.body;
+    
+    console.log('Change password attempt for user ID:', userId);
+    
+    // Validate input
+    if (!currentPassword || !newPassword) {
+      console.log('Missing required fields:', { currentPassword: !!currentPassword, newPassword: !!newPassword });
+      return res.status(400).json({ message: 'Current password and new password are required' });
+    }
+    
+    // Validate new password length
+    if (newPassword.length < 6) {
+      console.log('New password too short:', newPassword.length);
+      return res.status(400).json({ message: 'New password must be at least 6 characters long' });
+    }
+    
+    // Get user from database with password field included
+    const user = await User.findById(userId).select('+password');
+    if (!user) {
+      console.log('User not found with ID:', userId);
+      return res.status(404).json({ message: 'User not found' });
+    }
+    
+    console.log('User found:', {
+      id: user._id,
+      email: user.email,
+      passwordExists: !!user.password,
+      passwordLength: user.password?.length
+    });
+    
+    // Check if current password is correct
+    const isMatch = await user.matchPassword(currentPassword);
+    console.log('Password match result:', isMatch);
+    
+    if (!isMatch) {
+      console.log('Current password is incorrect for user:', user.email);
+      return res.status(401).json({ message: 'Current password is incorrect' });
+    }
+    
+    // Set new password (will be hashed by the pre-save hook in the User model)
+    console.log('Setting new password for user:', user.email);
+    user.password = newPassword;
+    await user.save();
+    
+    console.log('Password changed successfully for user:', user.email);
+    res.status(200).json({ message: 'Password changed successfully' });
+  } catch (error) {
+    console.error('Change password error:', error);
+    res.status(500).json({ message: 'Failed to change password', error: error.message });
   }
 }; 
