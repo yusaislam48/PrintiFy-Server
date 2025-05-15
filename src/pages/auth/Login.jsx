@@ -14,6 +14,7 @@ import {
   CircularProgress,
 } from '@mui/material';
 import { GitHub as GitHubIcon, Google as GoogleIcon } from '@mui/icons-material';
+import { authAPI } from '../../utils/api';
 
 const Login = () => {
   const navigate = useNavigate();
@@ -69,8 +70,25 @@ const Login = () => {
       localStorage.setItem('token', data.token);
       localStorage.setItem('refreshToken', data.refreshToken);
       
-      // Redirect to dashboard instead of home page
-      navigate('/dashboard');
+      // Check user role and redirect accordingly
+      try {
+        // Fetch user data to determine role
+        const userData = await authAPI.getCurrentUser();
+        
+        // Store user data in localStorage
+        localStorage.setItem('user', JSON.stringify(userData));
+        
+        // Redirect based on role
+        if (userData.role === 'admin' || userData.role === 'master' || userData.isAdmin === true) {
+          navigate('/admin');
+        } else {
+          navigate('/dashboard');
+        }
+      } catch (userError) {
+        console.error('Error fetching user data:', userError);
+        // If we can't determine role, default to dashboard
+        navigate('/dashboard');
+      }
     } catch (err) {
       console.error('Login error details:', err);
       setError(err.message || 'Login failed. Please check your credentials.');

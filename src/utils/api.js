@@ -443,4 +443,124 @@ export const printHubAPI = {
   }
 };
 
+// Admin API calls
+export const adminAPI = {
+  // Dashboard statistics
+  getDashboardStats: async () => {
+    try {
+      const response = await api.get('/admin/dashboard');
+      return response.data;
+    } catch (error) {
+      throw error.response?.data || { message: 'Failed to get dashboard stats' };
+    }
+  },
+
+  // Get all users with pagination
+  getAllUsers: async (page = 1, limit = 10) => {
+    try {
+      const response = await api.get(`/admin/users?page=${page}&limit=${limit}`);
+      return response.data;
+    } catch (error) {
+      throw error.response?.data || { message: 'Failed to get users' };
+    }
+  },
+
+  // Get user by ID
+  getUserById: async (userId) => {
+    try {
+      const response = await api.get(`/admin/users/${userId}`);
+      return response.data;
+    } catch (error) {
+      throw error.response?.data || { message: 'Failed to get user' };
+    }
+  },
+
+  // Update user
+  updateUser: async (userId, userData) => {
+    try {
+      const response = await api.put(`/admin/users/${userId}`, userData);
+      return response.data;
+    } catch (error) {
+      throw error.response?.data || { message: 'Failed to update user' };
+    }
+  },
+
+  // Delete user
+  deleteUser: async (userId) => {
+    try {
+      const response = await api.delete(`/admin/users/${userId}`);
+      return response.data;
+    } catch (error) {
+      throw error.response?.data || { message: 'Failed to delete user' };
+    }
+  },
+
+  // Add points to user
+  addPointsToUser: async (userId, points) => {
+    try {
+      const response = await api.post(`/admin/users/${userId}/add-points`, { points });
+      return response.data;
+    } catch (error) {
+      throw error.response?.data || { message: 'Failed to add points to user' };
+    }
+  },
+
+  // Get all print jobs with pagination and filters
+  getAllPrintJobs: async (page = 1, limit = 10, filters = {}) => {
+    try {
+      // Build query string from filters
+      const queryParams = new URLSearchParams({
+        page,
+        limit,
+        ...filters
+      }).toString();
+      
+      const response = await api.get(`/admin/print-jobs?${queryParams}`);
+      return response.data;
+    } catch (error) {
+      throw error.response?.data || { message: 'Failed to get print jobs' };
+    }
+  },
+
+  // Get print job by ID
+  getPrintJobById: async (jobId) => {
+    try {
+      const response = await api.get(`/admin/print-jobs/${jobId}`);
+      return response.data;
+    } catch (error) {
+      throw error.response?.data || { message: 'Failed to get print job' };
+    }
+  },
+
+  // Update print job status
+  updatePrintJobStatus: async (jobId, status) => {
+    try {
+      const response = await api.put(`/admin/print-jobs/${jobId}/status`, { status });
+      return response.data;
+    } catch (error) {
+      throw error.response?.data || { message: 'Failed to update print job status' };
+    }
+  },
+
+  // Delete print job
+  deletePrintJob: async (jobId) => {
+    try {
+      const response = await api.delete(`/admin/print-jobs/${jobId}`);
+      return response.data;
+    } catch (error) {
+      throw error.response?.data || { message: 'Failed to delete print job' };
+    }
+  },
+
+  // Create master admin
+  createMasterAdmin: async (adminData) => {
+    try {
+      const response = await api.post('/admin/create-master', adminData);
+      return response.data;
+    } catch (error) {
+      throw error.response?.data || { message: 'Failed to create master admin' };
+    }
+  },
+};
+
 export default api; 

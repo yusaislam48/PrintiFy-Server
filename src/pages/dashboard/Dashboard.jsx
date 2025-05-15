@@ -31,6 +31,9 @@ import {
   DialogContent,
   DialogActions,
   Modal,
+  TableContainer,
+  Chip,
+  Tooltip,
 } from '@mui/material';
 import {
   Dashboard as DashboardIcon,
@@ -51,6 +54,10 @@ import {
   OpenInNew as OpenInNewIcon,
   Preview as PreviewIcon,
   Lock as LockIcon,
+  ArrowForward as ArrowForwardIcon,
+  CreditCard as PointsIcon,
+  Refresh as RefreshIcon,
+  AdminPanelSettings as AdminPanelSettingsIcon,
 } from '@mui/icons-material';
 import { authAPI, printAPI } from '../../utils/api';
 import PDFUpload from '../../components/PDFUpload';
@@ -393,24 +400,63 @@ const Dashboard = () => {
   return (
     <Box sx={{ display: 'flex', flexDirection: 'column', minHeight: '100vh' }}>
       {/* App Bar */}
-      <AppBar position="static" sx={{ backgroundColor: '#111' }}>
+      <AppBar position="static" sx={{ backgroundColor: '#1a237e', boxShadow: 3 }}>
         <Toolbar>
           <IconButton edge="start" color="inherit" aria-label="menu" sx={{ mr: 2 }}>
             <MenuIcon />
           </IconButton>
-          <Typography variant="h6" component="div" sx={{ flexGrow: 1 }}>
+          <Typography variant="h6" component="div" sx={{ flexGrow: 1, display: 'flex', alignItems: 'center' }}>
+            <PrintIcon sx={{ mr: 1 }} />
             PrintiFy Dashboard
           </Typography>
-          <IconButton color="inherit">
-            <NotificationsIcon />
-          </IconButton>
-          <Avatar
-            alt={user?.name || 'User'}
-            src=""
-            sx={{ width: 32, height: 32, ml: 1, bgcolor: 'primary.main' }}
+          
+          {/* Admin Access Button - Only shown for admin/master users */}
+          {(user?.role === 'admin' || user?.role === 'master' || user?.isAdmin) && (
+            <Button 
+              color="secondary" 
+              variant="contained"
+              startIcon={<AdminPanelSettingsIcon />}
+              onClick={() => navigate('/admin')}
+              sx={{ mr: 2, borderRadius: 2 }}
+            >
+              Admin Panel
+            </Button>
+          )}
+          
+          <Button 
+            color="inherit" 
+            size="small" 
+            variant="outlined" 
+            startIcon={<FileUploadIcon />}
+            onClick={() => setTabValue(1)}
+            sx={{ mr: 2, borderRadius: 2, display: { xs: 'none', md: 'flex' } }}
           >
-            {user?.name?.charAt(0) || 'U'}
-          </Avatar>
+            Upload PDF
+          </Button>
+          
+          <Tooltip title="Notifications">
+            <IconButton color="inherit">
+              <NotificationsIcon />
+            </IconButton>
+          </Tooltip>
+          
+          <Box sx={{ display: 'flex', alignItems: 'center', ml: 1 }}>
+            <Box sx={{ mr: 1, display: { xs: 'none', sm: 'block' } }}>
+              <Typography variant="body2" sx={{ fontWeight: 'bold', lineHeight: 1 }}>
+                {user?.name}
+              </Typography>
+              <Typography variant="caption" sx={{ opacity: 0.8 }}>
+                {user?.points || 0} points
+              </Typography>
+            </Box>
+            <Avatar
+              alt={user?.name || 'User'}
+              src=""
+              sx={{ width: 32, height: 32, bgcolor: 'primary.light', color: 'primary.dark' }}
+            >
+              {user?.name?.charAt(0).toUpperCase() || 'U'}
+            </Avatar>
+          </Box>
         </Toolbar>
       </AppBar>
 
@@ -418,73 +464,215 @@ const Dashboard = () => {
       <Box sx={{ display: 'flex', flex: 1 }}>
         {/* Sidebar */}
         <Paper
+          elevation={3}
           sx={{
             width: 240,
             p: 2,
             display: { xs: 'none', sm: 'block' },
+            borderRadius: 0,
+            borderRight: '1px solid #eee',
+            height: 'calc(100vh - 64px)',
+            position: 'sticky',
+            top: 64,
+            overflow: 'auto'
           }}
         >
-          <Box sx={{ textAlign: 'center', mb: 2 }}>
+          <Box sx={{ textAlign: 'center', mb: 3 }}>
             <Avatar
               alt={user?.name || 'User'}
               src=""
-              sx={{ width: 64, height: 64, mx: 'auto', mb: 1, bgcolor: 'primary.main' }}
+              sx={{ 
+                width: 80, 
+                height: 80, 
+                mx: 'auto', 
+                mb: 1, 
+                bgcolor: 'primary.main',
+                boxShadow: '0 4px 10px rgba(0,0,0,0.15)'
+              }}
             >
-              {user?.name?.charAt(0) || 'U'}
+              {user?.name?.charAt(0).toUpperCase() || 'U'}
             </Avatar>
-            <Typography variant="h6">{user?.name || 'User'}</Typography>
+            <Typography variant="h6" fontWeight="bold">{user?.name || 'User'}</Typography>
             <Typography variant="body2" color="text.secondary">
               {user?.email || 'user@example.com'}
             </Typography>
+            
+            {/* Admin badge for admin users */}
+            {(user?.role === 'admin' || user?.role === 'master' || user?.isAdmin) && (
+              <Chip
+                label={user?.role === 'master' ? 'Master Admin' : 'Admin'}
+                color={user?.role === 'master' ? 'secondary' : 'primary'}
+                sx={{ mt: 1, fontWeight: 'bold', mb: 1 }}
+              />
+            )}
+            
+            <Box 
+              sx={{ 
+                mt: 1, 
+                p: 1, 
+                bgcolor: 'primary.main', 
+                color: 'white',
+                borderRadius: 2,
+                fontWeight: 'bold',
+                fontSize: '0.875rem'
+              }}
+            >
+              {user?.points || 0} Points Available
+            </Box>
+            
+            {/* Admin access button in sidebar */}
+            {(user?.role === 'admin' || user?.role === 'master' || user?.isAdmin) && (
+              <Button
+                variant="contained"
+                color="secondary"
+                startIcon={<AdminPanelSettingsIcon />}
+                fullWidth
+                onClick={() => navigate('/admin')}
+                sx={{ mt: 2, borderRadius: 2 }}
+              >
+                Go to Admin Panel
+              </Button>
+            )}
           </Box>
 
           <Divider sx={{ my: 2 }} />
 
-          <List>
-            <ListItem button selected={tabValue === 0} onClick={() => setTabValue(0)}>
-              <ListItemIcon>
+          <List sx={{ px: 0 }}>
+            <ListItem 
+              button 
+              selected={tabValue === 0} 
+              onClick={() => setTabValue(0)}
+              sx={{ 
+                borderRadius: 2,
+                mb: 0.5,
+                '&.Mui-selected': {
+                  bgcolor: 'primary.light',
+                  color: 'primary.dark',
+                  '& .MuiListItemIcon-root': {
+                    color: 'primary.dark',
+                  },
+                },
+              }}
+            >
+              <ListItemIcon sx={{ minWidth: 40 }}>
                 <DashboardIcon />
               </ListItemIcon>
               <ListItemText primary="Dashboard" />
             </ListItem>
-            <ListItem button selected={tabValue === 1} onClick={() => setTabValue(1)}>
-              <ListItemIcon>
+            
+            <ListItem 
+              button 
+              selected={tabValue === 1} 
+              onClick={() => setTabValue(1)}
+              sx={{ 
+                borderRadius: 2,
+                mb: 0.5,
+                '&.Mui-selected': {
+                  bgcolor: 'primary.light',
+                  color: 'primary.dark',
+                  '& .MuiListItemIcon-root': {
+                    color: 'primary.dark',
+                  },
+                },
+              }}
+            >
+              <ListItemIcon sx={{ minWidth: 40 }}>
                 <FileUploadIcon />
               </ListItemIcon>
               <ListItemText primary="Upload PDF" />
             </ListItem>
-            <ListItem button selected={tabValue === 2} onClick={() => setTabValue(2)}>
-              <ListItemIcon>
+            
+            <ListItem 
+              button 
+              selected={tabValue === 2} 
+              onClick={() => setTabValue(2)}
+              sx={{ 
+                borderRadius: 2,
+                mb: 0.5,
+                '&.Mui-selected': {
+                  bgcolor: 'primary.light',
+                  color: 'primary.dark',
+                  '& .MuiListItemIcon-root': {
+                    color: 'primary.dark',
+                  },
+                },
+              }}
+            >
+              <ListItemIcon sx={{ minWidth: 40 }}>
                 <PrintIcon />
               </ListItemIcon>
               <ListItemText primary="Print Jobs" />
             </ListItem>
-            <ListItem button>
-              <ListItemIcon>
+            
+            <ListItem 
+              button
+              sx={{ 
+                borderRadius: 2,
+                mb: 0.5,
+              }}
+            >
+              <ListItemIcon sx={{ minWidth: 40 }}>
                 <DescriptionIcon />
               </ListItemIcon>
               <ListItemText primary="Templates" />
             </ListItem>
-            <ListItem button>
-              <ListItemIcon>
+            
+            <ListItem 
+              button
+              sx={{ 
+                borderRadius: 2,
+                mb: 0.5,
+              }}
+            >
+              <ListItemIcon sx={{ minWidth: 40 }}>
                 <HistoryIcon />
               </ListItemIcon>
               <ListItemText primary="History" />
             </ListItem>
-            <ListItem button>
-              <ListItemIcon>
+            
+            <ListItem 
+              button
+              sx={{ 
+                borderRadius: 2,
+                mb: 0.5,
+              }}
+            >
+              <ListItemIcon sx={{ minWidth: 40 }}>
                 <PersonIcon />
               </ListItemIcon>
               <ListItemText primary="Profile" />
             </ListItem>
-            <ListItem button selected={tabValue === 3} onClick={() => setTabValue(3)}>
-              <ListItemIcon>
+            
+            <ListItem 
+              button 
+              selected={tabValue === 3} 
+              onClick={() => setTabValue(3)}
+              sx={{ 
+                borderRadius: 2,
+                mb: 0.5,
+                '&.Mui-selected': {
+                  bgcolor: 'primary.light',
+                  color: 'primary.dark',
+                  '& .MuiListItemIcon-root': {
+                    color: 'primary.dark',
+                  },
+                },
+              }}
+            >
+              <ListItemIcon sx={{ minWidth: 40 }}>
                 <LockIcon />
               </ListItemIcon>
               <ListItemText primary="Change Password" />
             </ListItem>
-            <ListItem button>
-              <ListItemIcon>
+            
+            <ListItem 
+              button
+              sx={{ 
+                borderRadius: 2,
+                mb: 0.5,
+              }}
+            >
+              <ListItemIcon sx={{ minWidth: 40 }}>
                 <SettingsIcon />
               </ListItemIcon>
               <ListItemText primary="Settings" />
@@ -499,6 +687,7 @@ const Dashboard = () => {
             startIcon={<LogoutIcon />}
             fullWidth
             onClick={handleLogout}
+            sx={{ borderRadius: 2 }}
           >
             Logout
           </Button>
@@ -525,49 +714,121 @@ const Dashboard = () => {
 
           {/* Dashboard Tab */}
           <TabPanel value={tabValue} index={0}>
-            <Typography variant="h4" sx={{ mb: 3 }}>
+            <Typography variant="h4" sx={{ mb: 3, fontWeight: 'bold', color: 'primary.main' }}>
               Welcome, {user?.name || 'User'}!
             </Typography>
 
             <Grid container spacing={3}>
               {/* User Info Card */}
               <Grid item xs={12} md={4}>
-                <Paper elevation={2} sx={{ p: 3, height: '100%' }}>
-                  <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', mb: 2 }}>
+                <Paper elevation={3} sx={{ p: 3, height: '100%', borderRadius: 2, position: 'relative', overflow: 'hidden' }}>
+                  <Box sx={{ 
+                    position: 'absolute',
+                    top: 0,
+                    left: 0,
+                    width: '100%',
+                    height: '80px',
+                    bgcolor: 'primary.main',
+                    zIndex: 0
+                  }} />
+                  <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', mb: 2, position: 'relative', zIndex: 1 }}>
                     <Avatar
                       src={user?.profilePicture || ''}
                       alt={user?.name}
-                      sx={{ width: 100, height: 100, mb: 2 }}
-                    />
-                    <Typography variant="h5" gutterBottom>
+                      sx={{ 
+                        width: 100, 
+                        height: 100, 
+                        mb: 2, 
+                        mt: 1,
+                        border: '4px solid white',
+                        boxShadow: '0 4px 10px rgba(0,0,0,0.1)'
+                      }}
+                    >
+                      {user?.name?.charAt(0).toUpperCase() || 'U'}
+                    </Avatar>
+                    <Typography variant="h5" gutterBottom fontWeight="bold">
                       {user?.name}
                     </Typography>
-                    <Typography variant="body1" color="textSecondary" gutterBottom>
-                      {user?.email}
-                    </Typography>
-                    <Typography variant="body2" color="textSecondary">
-                      Student ID: {user?.studentId}
-                    </Typography>
-                    <Typography variant="body2" color="textSecondary">
-                      Phone: {user?.phone}
-                    </Typography>
-                    
-                    {/* Add Points Display Here */}
                     <Box sx={{ 
-                      mt: 2, 
+                      display: 'flex', 
+                      alignItems: 'center', 
+                      bgcolor: user?.isVerified ? 'success.light' : 'warning.light',
+                      px: 1.5,
+                      py: 0.5,
+                      borderRadius: 2,
+                      mb: 1
+                    }}>
+                      {user?.isVerified ? (
+                        <Typography variant="body2" color="success.dark" fontWeight="medium">
+                          Verified Account
+                        </Typography>
+                      ) : (
+                        <Typography variant="body2" color="warning.dark" fontWeight="medium">
+                          Verification Pending
+                        </Typography>
+                      )}
+                    </Box>
+                    
+                    <Box sx={{ width: '100%', mt: 1 }}>
+                      <Box sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
+                        <Typography variant="body2" color="text.secondary" sx={{ minWidth: 100 }}>
+                          Email:
+                        </Typography>
+                        <Typography variant="body2" fontWeight="medium">
+                          {user?.email}
+                        </Typography>
+                      </Box>
+                      <Box sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
+                        <Typography variant="body2" color="text.secondary" sx={{ minWidth: 100 }}>
+                          Student ID:
+                        </Typography>
+                        <Typography variant="body2" fontWeight="medium">
+                          {user?.studentId || 'Not set'}
+                        </Typography>
+                      </Box>
+                      <Box sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
+                        <Typography variant="body2" color="text.secondary" sx={{ minWidth: 100 }}>
+                          Phone:
+                        </Typography>
+                        <Typography variant="body2" fontWeight="medium">
+                          {user?.phone || 'Not set'}
+                        </Typography>
+                      </Box>
+                      <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                        <Typography variant="body2" color="text.secondary" sx={{ minWidth: 100 }}>
+                          Joined:
+                        </Typography>
+                        <Typography variant="body2" fontWeight="medium">
+                          {user?.createdAt ? formatDate(user.createdAt) : 'Unknown'}
+                        </Typography>
+                      </Box>
+                    </Box>
+                    
+                    {/* Points Display */}
+                    <Box sx={{ 
+                      mt: 3, 
                       p: 2, 
                       bgcolor: 'primary.light', 
                       color: 'primary.contrastText',
-                      borderRadius: 2,
+                      borderRadius: 3,
                       width: '100%',
-                      textAlign: 'center'
+                      textAlign: 'center',
+                      boxShadow: '0 4px 8px rgba(0,0,0,0.1)'
                     }}>
                       <Typography variant="h6" gutterBottom>
                         Available Points
                       </Typography>
-                      <Typography variant="h3" fontWeight="bold">
+                      <Typography variant="h2" fontWeight="bold">
                         {user?.points || 0}
                       </Typography>
+                      <Button 
+                        variant="contained" 
+                        size="small" 
+                        sx={{ mt: 1, bgcolor: 'primary.dark' }}
+                        onClick={() => navigate('/profile/add-points')}
+                      >
+                        Get More Points
+                      </Button>
                     </Box>
                   </Box>
                 </Paper>
@@ -634,38 +895,130 @@ const Dashboard = () => {
               
               {/* Points History Card */}
               <Grid item xs={12}>
-                <Paper elevation={2} sx={{ p: 3 }}>
-                  <Typography variant="h6" gutterBottom>
-                    Points History
-                  </Typography>
+                <Paper elevation={3} sx={{ p: 3, borderRadius: 2 }}>
+                  <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
+                    <Typography variant="h6" fontWeight="bold" sx={{ display: 'flex', alignItems: 'center' }}>
+                      <PointsIcon sx={{ mr: 1, color: 'primary.main' }} />
+                      Points History
+                    </Typography>
+                    
+                    <Box>
+                      <Button 
+                        color="primary" 
+                        size="small" 
+                        sx={{ fontWeight: 'medium' }}
+                        endIcon={<ArrowForwardIcon />}
+                        onClick={() => navigate('/points-history')}
+                      >
+                        View All
+                      </Button>
+                    </Box>
+                  </Box>
                   
                   {jobsLoading ? (
                     <Box sx={{ display: 'flex', justifyContent: 'center', p: 3 }}>
                       <CircularProgress />
                     </Box>
                   ) : calculatePointsStatistics().pointsPerJob.length > 0 ? (
-                    <Table size="small">
-                      <TableHead>
-                        <TableRow>
-                          <TableCell>Date</TableCell>
-                          <TableCell>File Name</TableCell>
-                          <TableCell align="right">Points Used</TableCell>
-                        </TableRow>
-                      </TableHead>
-                      <TableBody>
-                        {calculatePointsStatistics().pointsPerJob.map((job) => (
-                          <TableRow key={job.id}>
-                            <TableCell>{formatDate(job.date)}</TableCell>
-                            <TableCell>{job.fileName}</TableCell>
-                            <TableCell align="right">{job.pointsUsed}</TableCell>
-                          </TableRow>
-                        ))}
-                      </TableBody>
-                    </Table>
+                    <>
+                      <TableContainer sx={{ 
+                        maxHeight: 300, 
+                        '&::-webkit-scrollbar': {
+                          width: '8px',
+                        },
+                        '&::-webkit-scrollbar-thumb': {
+                          backgroundColor: '#ddd',
+                          borderRadius: '4px',
+                        },
+                        '&::-webkit-scrollbar-track': {
+                          backgroundColor: '#f5f5f5',
+                        },
+                      }}>
+                        <Table size="small" stickyHeader>
+                          <TableHead>
+                            <TableRow>
+                              <TableCell sx={{ fontWeight: 'bold', bgcolor: 'background.paper' }}>Date</TableCell>
+                              <TableCell sx={{ fontWeight: 'bold', bgcolor: 'background.paper' }}>File Name</TableCell>
+                              <TableCell align="right" sx={{ fontWeight: 'bold', bgcolor: 'background.paper' }}>Points Used</TableCell>
+                            </TableRow>
+                          </TableHead>
+                          <TableBody>
+                            {calculatePointsStatistics().pointsPerJob.map((job) => (
+                              <TableRow key={job.id} hover>
+                                <TableCell>{formatDate(job.date)}</TableCell>
+                                <TableCell sx={{ maxWidth: 300 }}>
+                                  <Typography variant="body2" noWrap>
+                                    {job.fileName}
+                                  </Typography>
+                                </TableCell>
+                                <TableCell align="right">
+                                  <Chip 
+                                    label={`-${job.pointsUsed}`}
+                                    color="error"
+                                    size="small"
+                                    variant="outlined"
+                                  />
+                                </TableCell>
+                              </TableRow>
+                            ))}
+                          </TableBody>
+                        </Table>
+                      </TableContainer>
+                      
+                      <Box sx={{ 
+                        mt: 2, 
+                        p: 2, 
+                        bgcolor: '#f9f9f9', 
+                        borderRadius: 2,
+                        border: '1px dashed #ccc',
+                        display: 'flex',
+                        justifyContent: 'space-between',
+                        alignItems: 'center'
+                      }}>
+                        <Box>
+                          <Typography variant="body2" color="text.secondary">
+                            Total Points Used
+                          </Typography>
+                          <Typography variant="h6" color="error.main" fontWeight="bold">
+                            {calculatePointsStatistics().totalPointsUsed}
+                          </Typography>
+                        </Box>
+                        
+                        <Box>
+                          <Typography variant="body2" color="text.secondary">
+                            Available Points
+                          </Typography>
+                          <Typography variant="h6" color="primary.main" fontWeight="bold">
+                            {user?.points || 0}
+                          </Typography>
+                        </Box>
+                        
+                        <Box>
+                          <Typography variant="body2" color="text.secondary">
+                            Completed Jobs
+                          </Typography>
+                          <Typography variant="h6" color="success.main" fontWeight="bold">
+                            {calculatePointsStatistics().completedJobs}
+                          </Typography>
+                        </Box>
+                      </Box>
+                    </>
                   ) : (
-                    <Typography variant="body2" color="textSecondary" sx={{ p: 2, textAlign: 'center' }}>
-                      No points history available
-                    </Typography>
+                    <Box sx={{ p: 3, textAlign: 'center', bgcolor: '#f9f9f9', borderRadius: 2 }}>
+                      <Typography variant="body1" color="text.secondary" gutterBottom>
+                        No points history available
+                      </Typography>
+                      <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+                        Your points usage history will appear here after you complete print jobs.
+                      </Typography>
+                      <Button 
+                        variant="contained" 
+                        startIcon={<FileUploadIcon />}
+                        onClick={() => setTabValue(1)}
+                      >
+                        Start Printing Now
+                      </Button>
+                    </Box>
                   )}
                 </Paper>
               </Grid>
@@ -682,20 +1035,39 @@ const Dashboard = () => {
 
           {/* Print Jobs Tab */}
           <TabPanel value={tabValue} index={2}>
-            <Typography variant="h4" sx={{ mb: 3 }}>
-              Print Jobs
-            </Typography>
+            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
+              <Typography variant="h4" fontWeight="bold" color="primary.main">
+                My Print Jobs
+              </Typography>
+              
+              <Button
+                variant="contained"
+                startIcon={<FileUploadIcon />}
+                onClick={() => setTabValue(1)}
+                sx={{ borderRadius: 2 }}
+              >
+                Upload New PDF
+              </Button>
+            </Box>
             
-            <Paper sx={{ p: 3 }}>
-              <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
-                <Typography variant="h6">Your Print Queue</Typography>
-                <Button
-                  variant="outlined"
-                  startIcon={<FileUploadIcon />}
-                  onClick={() => setTabValue(1)}
-                >
-                  Upload New PDF
-                </Button>
+            <Paper elevation={3} sx={{ p: 3, borderRadius: 2 }}>
+              <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
+                <Typography variant="h6" fontWeight="bold" sx={{ display: 'flex', alignItems: 'center' }}>
+                  <PrintIcon sx={{ mr: 1, color: 'primary.main' }} />
+                  Print Queue
+                </Typography>
+                
+                <Box>
+                  <Button
+                    variant="outlined"
+                    size="small"
+                    startIcon={<RefreshIcon />}
+                    onClick={() => fetchPrintJobs(true)}
+                    sx={{ borderRadius: 2 }}
+                  >
+                    Refresh Jobs
+                  </Button>
+                </Box>
               </Box>
               
               {jobsLoading ? (
@@ -709,42 +1081,78 @@ const Dashboard = () => {
                       sx={{ 
                         p: 4, 
                         textAlign: 'center',
-                        backgroundColor: '#f9f9f9' 
+                        backgroundColor: '#f9f9f9',
+                        borderRadius: 2,
+                        border: '1px dashed #ccc'
                       }}
                     >
-                      <Typography variant="body1" sx={{ mb: 2 }}>
-                        You don't have any print jobs yet.
+                      <Box sx={{ mb: 3 }}>
+                        <img 
+                          src="/empty-queue.svg" 
+                          alt="Empty Queue" 
+                          style={{ width: '180px', height: 'auto', opacity: 0.7 }}
+                        />
+                      </Box>
+                      <Typography variant="h6" color="text.secondary" gutterBottom>
+                        Your Print Queue is Empty
+                      </Typography>
+                      <Typography variant="body1" sx={{ mb: 3 }} color="text.secondary">
+                        Upload a PDF document to get started with printing.
                       </Typography>
                       <Button 
                         variant="contained" 
                         onClick={() => setTabValue(1)}
                         startIcon={<FileUploadIcon />}
+                        size="large"
+                        sx={{ borderRadius: 2 }}
                       >
                         Upload a PDF Now
                       </Button>
                     </Paper>
                   ) : (
                     <Box sx={{ overflow: 'auto' }}>
-                      <Table>
+                      <Table sx={{ minWidth: 800 }}>
                         <TableHead>
                           <TableRow>
-                            <TableCell>File Name</TableCell>
-                            <TableCell>Upload Date</TableCell>
-                            <TableCell>Status</TableCell>
-                            <TableCell>Copies</TableCell>
-                            <TableCell>Paper Size</TableCell>
-                            <TableCell>Actions</TableCell>
+                            <TableCell sx={{ fontWeight: 'bold' }}>File Name</TableCell>
+                            <TableCell sx={{ fontWeight: 'bold' }}>Upload Date</TableCell>
+                            <TableCell sx={{ fontWeight: 'bold' }}>Status</TableCell>
+                            <TableCell sx={{ fontWeight: 'bold' }}>Details</TableCell>
+                            <TableCell sx={{ fontWeight: 'bold' }}>Actions</TableCell>
                           </TableRow>
                         </TableHead>
                         <TableBody>
                           {printJobs.map((job) => (
-                            <TableRow key={job._id} hover>
+                            <TableRow 
+                              key={job._id} 
+                              hover 
+                              sx={{
+                                '&:last-child td, &:last-child th': { border: 0 },
+                                bgcolor: job.status === 'pending' ? 'rgba(255, 244, 229, 0.3)' : 'inherit'
+                              }}
+                            >
                               <TableCell>
                                 <Box sx={{ display: 'flex', alignItems: 'center' }}>
-                                  <DescriptionIcon sx={{ mr: 1, color: 'primary.main' }} />
-                                  <Typography variant="body2" sx={{ fontWeight: 'medium' }}>
-                                    {job.fileName}
-                                  </Typography>
+                                  <Avatar 
+                                    variant="rounded" 
+                                    sx={{ 
+                                      bgcolor: 'primary.light', 
+                                      width: 36, 
+                                      height: 36,
+                                      mr: 1.5,
+                                      color: 'primary.main'
+                                    }}
+                                  >
+                                    <DescriptionIcon />
+                                  </Avatar>
+                                  <Box>
+                                    <Typography variant="body2" sx={{ fontWeight: 'medium', maxWidth: 250 }} noWrap>
+                                      {job.fileName}
+                                    </Typography>
+                                    <Typography variant="caption" color="text.secondary">
+                                      {job.fileSize ? `${(job.fileSize / 1024 / 1024).toFixed(2)} MB` : 'Size unknown'}
+                                    </Typography>
+                                  </Box>
                                 </Box>
                               </TableCell>
                               <TableCell>{formatDate(job.createdAt)}</TableCell>
@@ -778,36 +1186,55 @@ const Dashboard = () => {
                                   </Typography>
                                 </Box>
                               </TableCell>
-                              <TableCell>{job.printSettings?.copies || 1}</TableCell>
-                              <TableCell sx={{ textTransform: 'uppercase' }}>
-                                {job.printSettings?.paperSize || 'A4'}
+                              <TableCell>
+                                <Box>
+                                  <Typography variant="body2">
+                                    Copies: <strong>{job.printSettings?.copies || 1}</strong>
+                                  </Typography>
+                                  <Typography variant="body2">
+                                    Pages: <strong>{job.printSettings?.totalPages || 'Unknown'}</strong>
+                                  </Typography>
+                                </Box>
                               </TableCell>
                               <TableCell>
                                 <Box sx={{ display: 'flex', gap: 1 }}>
-                                  <IconButton
-                                    size="small"
-                                    onClick={() => handlePreview(job)}
-                                    title="Preview PDF"
-                                  >
-                                    <PreviewIcon fontSize="small" />
-                                  </IconButton>
-                                  <IconButton
-                                    size="small"
-                                    color="info"
-                                    onClick={() => handleViewSettings(job)}
-                                    title="View Print Settings"
-                                  >
-                                    <InfoIcon fontSize="small" />
-                                  </IconButton>
-                                  {(job.status === 'pending' || job.status === 'processing') && (
+                                  <Tooltip title="Preview PDF">
                                     <IconButton
                                       size="small"
-                                      color="error"
-                                      onClick={() => handleCancelJob(job._id)}
-                                      title="Cancel Job"
+                                      onClick={() => handlePreview(job)}
+                                      sx={{ color: 'primary.main' }}
                                     >
-                                      <CancelIcon fontSize="small" />
+                                      <PreviewIcon fontSize="small" />
                                     </IconButton>
+                                  </Tooltip>
+                                  <Tooltip title="View Print Settings">
+                                    <IconButton
+                                      size="small"
+                                      color="info"
+                                      onClick={() => handleViewSettings(job)}
+                                    >
+                                      <InfoIcon fontSize="small" />
+                                    </IconButton>
+                                  </Tooltip>
+                                  <Tooltip title="Download PDF">
+                                    <IconButton
+                                      size="small"
+                                      color="success"
+                                      onClick={() => handleDownload(job.fileUrl, job.fileName, job._id)}
+                                    >
+                                      <FileDownloadIcon fontSize="small" />
+                                    </IconButton>
+                                  </Tooltip>
+                                  {(job.status === 'pending' || job.status === 'processing') && (
+                                    <Tooltip title="Cancel Job">
+                                      <IconButton
+                                        size="small"
+                                        color="error"
+                                        onClick={() => handleCancelJob(job._id)}
+                                      >
+                                        <CancelIcon fontSize="small" />
+                                      </IconButton>
+                                    </Tooltip>
                                   )}
                                 </Box>
                               </TableCell>
@@ -824,10 +1251,32 @@ const Dashboard = () => {
           
           {/* Change Password Tab */}
           <TabPanel value={tabValue} index={3}>
-            <Paper sx={{ p: 3 }}>
-              <Typography variant="h4" sx={{ mb: 3 }}>
-                Change Password
-              </Typography>
+            <Typography variant="h4" sx={{ mb: 3, fontWeight: 'bold', color: 'primary.main' }}>
+              Change Password
+            </Typography>
+            
+            <Paper elevation={3} sx={{ p: 3, borderRadius: 2, maxWidth: 600, mx: 'auto' }}>
+              <Box sx={{ mb: 3, textAlign: 'center' }}>
+                <Avatar sx={{ 
+                  width: 70, 
+                  height: 70, 
+                  mx: 'auto', 
+                  mb: 2, 
+                  bgcolor: 'primary.light', 
+                  color: 'primary.dark' 
+                }}>
+                  <LockIcon sx={{ fontSize: 40 }} />
+                </Avatar>
+                <Typography variant="h6" gutterBottom fontWeight="bold">
+                  Update Your Password
+                </Typography>
+                <Typography variant="body2" color="text.secondary">
+                  Choose a strong, unique password to protect your account.
+                </Typography>
+              </Box>
+              
+              <Divider sx={{ mb: 3 }} />
+              
               <ChangePassword />
             </Paper>
           </TabPanel>
