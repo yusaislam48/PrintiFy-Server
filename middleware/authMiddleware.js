@@ -2,45 +2,80 @@ const jwt = require('jsonwebtoken');
 const User = require('../models/User');
 const jwtConfig = require('../config/jwt');
 
-// Protect routes
+// Middleware to protect routes - requires valid JWT
 exports.protect = async (req, res, next) => {
-  let token;
-  
-  // Check for token in headers
-  if (
-    req.headers.authorization &&
-    req.headers.authorization.startsWith('Bearer')
-  ) {
-    try {
-      // Get token from header
+  try {
+    let token;
+    
+    // Check if token exists in Authorization header
+    if (req.headers.authorization && req.headers.authorization.startsWith('Bearer')) {
       token = req.headers.authorization.split(' ')[1];
-      
+    }
+    
+    // If no token found, return unauthorized
+    if (!token) {
+      return res.status(401).json({ message: 'Not authorized, no token provided' });
+    }
+    
+    try {
       // Verify token
-      const decoded = jwt.verify(
-        token, 
-        jwtConfig.secretKey
-      );
+      const decoded = jwt.verify(token, jwtConfig.secretKey);
       
-      // Get user from DB and exclude password
-      req.user = await User.findById(decoded.id).select('-password');
+      // Attach user to request object
+      req.user = decoded;
       
       next();
     } catch (error) {
-      console.error('Authentication error:', error);
-      res.status(401).json({ message: 'Not authorized, token failed' });
+      console.error('JWT verification error:', error);
+      return res.status(401).json({ message: 'Not authorized, token failed' });
     }
-  }
-  
-  if (!token) {
-    res.status(401).json({ message: 'Not authorized, no token provided' });
+  } catch (error) {
+    console.error('Auth middleware error:', error);
+    res.status(500).json({ message: 'Server error in auth middleware' });
   }
 };
 
-// Admin middleware
-exports.admin = (req, res, next) => {
-  if (req.user && req.user.role === 'admin') {
-    next();
-  } else {
-    res.status(403).json({ message: 'Not authorized as admin' });
+// Middleware to restrict routes to admin users only
+exports.admin = async (req, res, next) => {
+  try {
+    // Get user from database to check current role
+    // (since role might have changed since token was issued)
+    const user = await User.findById(req.user.id);
+    
+    if (!user) {
+      return res.status(404).json({ message: 'User not found' });
+    }
+    
+    // Check if user is admin or master
+    if (user.role === 'admin' || user.role === 'master' || user.isAdmin === true) {
+      next();
+    } else {
+      return res.status(403).json({ message: 'Not authorized as admin' });
+    }
+  } catch (error) {
+    console.error('Admin middleware error:', error);
+    res.status(500).json({ message: 'Server error in admin middleware' });
+  }
+};
+
+// Middleware to restrict routes to master admin only
+exports.masterAdmin = async (req, res, next) => {
+  try {
+    // Get user from database to check current role
+    const user = await User.findById(req.user.id);
+    
+    if (!user) {
+      return res.status(404).json({ message: 'User not found' });
+    }
+    
+    // Check if user is master admin
+    if (user.role === 'master') {
+      next();
+    } else {
+      return res.status(403).json({ message: 'Not authorized as master admin' });
+    }
+  } catch (error) {
+    console.error('Master admin middleware error:', error);
+    res.status(500).json({ message: 'Server error in master admin middleware' });
   }
 }; 

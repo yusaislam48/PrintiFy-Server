@@ -5,6 +5,7 @@ const connectDB = require('./config/db');
 const authRoutes = require('./routes/auth');
 const userRoutes = require('./routes/user');
 const printRoutes = require('./routes/print');
+const adminRoutes = require('./routes/admin');
 const { cloudinary } = require('./config/cloudinary');
 const axios = require('axios');
 
@@ -37,6 +38,7 @@ app.use((req, res, next) => {
 app.use('/api/auth', authRoutes);
 app.use('/api/users', userRoutes);
 app.use('/api/print', printRoutes);
+app.use('/api/admin', adminRoutes);
 
 // PDF Proxy route - handles /pdf-proxy/* requests
 app.get('/pdf-proxy/:cloud_name/raw/upload/:file_path', async (req, res) => {
@@ -141,6 +143,44 @@ app.get('/', (req, res) => {
   res.send('PrintiFy API is running');
 });
 
+// Create initial master admin account if it doesn't exist
+const createInitialAdmin = async () => {
+  try {
+    const User = require('./models/User');
+    
+    // Check if any master admin exists
+    const adminExists = await User.findOne({ role: 'master' });
+    
+    if (!adminExists) {
+      console.log('No master admin found. Creating initial master admin account...');
+      
+      // Create a master admin with default credentials
+      const masterAdmin = new User({
+        name: 'Master Admin',
+        email: 'admin@printify.com',
+        password: 'admin123',  // Will be hashed by pre-save hook
+        studentId: '0000000',
+        phone: '00000000000',
+        role: 'master',
+        isAdmin: true,
+        isVerified: true,
+        points: 999999
+      });
+      
+      await masterAdmin.save();
+      
+      console.log('Initial master admin created successfully.');
+      console.log('Email: admin@printify.com');
+      console.log('Password: admin123');
+      console.log('Please change these credentials after first login!');
+    } else {
+      console.log('Master admin account already exists.');
+    }
+  } catch (error) {
+    console.error('Error creating initial admin:', error);
+  }
+};
+
 // Error handling middleware
 app.use((err, req, res, next) => {
   console.error(err.stack);
@@ -149,6 +189,11 @@ app.use((err, req, res, next) => {
 
 // Start server
 const PORT = process.env.PORT || 5000;
-app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
+app.listen(PORT, () => {
+  console.log(`Server running on port ${PORT}`);
+  
+  // Create initial admin account
+  createInitialAdmin();
+});
 
 module.exports = app; 

@@ -46,8 +46,12 @@ const userSchema = new mongoose.Schema({
   },
   role: {
     type: String,
-    enum: ['user', 'admin'],
+    enum: ['user', 'admin', 'master'],
     default: 'user'
+  },
+  isAdmin: {
+    type: Boolean,
+    default: false
   },
   points: {
     type: Number,
