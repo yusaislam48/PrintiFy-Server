@@ -18,7 +18,8 @@ import {
   useMediaQuery,
   useTheme,
   Button,
-  Chip
+  Chip,
+  ListItemButton
 } from '@mui/material';
 import {
   Menu as MenuIcon,
@@ -35,6 +36,7 @@ import {
 import { authAPI } from '../../utils/api';
 
 const drawerWidth = 240;
+const collapsedDrawerWidth = 70;
 
 const AdminLayout = () => {
   const [open, setOpen] = useState(true);
@@ -45,6 +47,7 @@ const AdminLayout = () => {
   const location = useLocation();
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('md'));
+  const isSmall = useMediaQuery(theme.breakpoints.down('sm'));
 
   // Auto-close drawer on mobile
   useEffect(() => {
@@ -125,20 +128,27 @@ const AdminLayout = () => {
 
   if (loading) {
     return (
-      <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh' }}>
+      <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh', bgcolor: '#fafafa' }}>
         <Typography>Loading...</Typography>
       </Box>
     );
   }
 
   return (
-    <Box sx={{ display: 'flex' }}>
+    <Box sx={{ display: 'flex', bgcolor: '#fafafa', minHeight: '100vh' }}>
       {/* App Bar */}
       <AppBar
         position="fixed"
         sx={{
           zIndex: (theme) => theme.zIndex.drawer + 1,
-          backgroundColor: '#111',
+          backgroundColor: '#000',
+          boxShadow: '0 1px 3px rgba(0,0,0,0.12)',
+          width: { sm: `calc(100% - ${open ? drawerWidth : collapsedDrawerWidth}px)` },
+          ml: { sm: `${open ? drawerWidth : collapsedDrawerWidth}px` },
+          transition: theme.transitions.create(['width', 'margin'], {
+            easing: theme.transitions.easing.sharp,
+            duration: theme.transitions.duration.leavingScreen,
+          }),
         }}
       >
         <Toolbar>
@@ -147,11 +157,11 @@ const AdminLayout = () => {
             aria-label="open drawer"
             edge="start"
             onClick={handleDrawerToggle}
-            sx={{ mr: 2 }}
+            sx={{ mr: 2, display: { sm: 'none' } }}
           >
             <MenuIcon />
           </IconButton>
-          <Typography variant="h6" noWrap component="div" sx={{ flexGrow: 1 }}>
+          <Typography variant="h6" noWrap component="div" sx={{ flexGrow: 1, fontWeight: 500 }}>
             PrintiFy Admin
           </Typography>
           
@@ -161,7 +171,17 @@ const AdminLayout = () => {
             color="inherit" 
             size="small"
             onClick={() => navigate('/dashboard')}
-            sx={{ mr: 2, borderRadius: 2, textTransform: 'none' }}
+            sx={{ 
+              mr: 2, 
+              borderRadius: 1, 
+              textTransform: 'none',
+              borderColor: 'rgba(255,255,255,0.5)',
+              '&:hover': {
+                borderColor: 'white',
+                backgroundColor: 'rgba(255,255,255,0.08)'
+              },
+              display: { xs: 'none', sm: 'flex' }
+            }}
             startIcon={<PersonIcon />}
           >
             User Dashboard
@@ -170,9 +190,14 @@ const AdminLayout = () => {
           {/* Admin Badge */}
           <Chip
             label={user?.role === 'master' ? 'Master Admin' : 'Admin'}
-            color={user?.role === 'master' ? 'secondary' : 'primary'}
+            color="default"
             size="small"
-            sx={{ mr: 2 }}
+            sx={{ 
+              mr: 2, 
+              fontWeight: 'bold',
+              bgcolor: user?.role === 'master' ? 'secondary.main' : 'primary.main',
+              color: 'white'
+            }}
           />
           
           {/* Avatar and Profile Menu */}
@@ -187,9 +212,15 @@ const AdminLayout = () => {
             <Avatar
               alt={user?.name || 'Admin'}
               src=""
-              sx={{ width: 32, height: 32, bgcolor: 'primary.main' }}
+              sx={{ 
+                width: 32, 
+                height: 32, 
+                bgcolor: 'white',
+                color: '#000',
+                fontWeight: 'bold'
+              }}
             >
-              {user?.name?.charAt(0) || 'A'}
+              {user?.name?.charAt(0)?.toUpperCase() || 'A'}
             </Avatar>
           </IconButton>
           <Menu
@@ -198,6 +229,13 @@ const AdminLayout = () => {
             onClose={handleProfileMenuClose}
             transformOrigin={{ horizontal: 'right', vertical: 'top' }}
             anchorOrigin={{ horizontal: 'right', vertical: 'bottom' }}
+            PaperProps={{
+              sx: {
+                mt: 1,
+                boxShadow: '0 4px 20px rgba(0,0,0,0.1)',
+                minWidth: 180
+              }
+            }}
           >
             <MenuItem onClick={() => navigate('/profile')}>
               <ListItemIcon>
@@ -205,11 +243,12 @@ const AdminLayout = () => {
               </ListItemIcon>
               Profile
             </MenuItem>
+            <Divider />
             <MenuItem onClick={handleLogout}>
               <ListItemIcon>
-                <LogoutIcon fontSize="small" />
+                <LogoutIcon fontSize="small" sx={{ color: 'error.main' }} />
               </ListItemIcon>
-              Logout
+              <Typography color="error">Logout</Typography>
             </MenuItem>
           </Menu>
         </Toolbar>
@@ -217,66 +256,191 @@ const AdminLayout = () => {
 
       {/* Drawer */}
       <Drawer
-        variant={isMobile ? 'temporary' : 'persistent'}
-        open={open}
+        variant={isMobile ? 'temporary' : 'permanent'}
+        open={isMobile ? open : true}
         onClose={isMobile ? handleDrawerToggle : undefined}
         sx={{
-          width: drawerWidth,
+          width: open ? drawerWidth : collapsedDrawerWidth,
           flexShrink: 0,
           [`& .MuiDrawer-paper`]: {
-            width: drawerWidth,
+            width: open ? drawerWidth : collapsedDrawerWidth,
             boxSizing: 'border-box',
+            bgcolor: '#000',
+            color: 'white',
+            overflowX: 'hidden',
+            transition: theme.transitions.create('width', {
+              easing: theme.transitions.easing.sharp,
+              duration: theme.transitions.duration.enteringScreen,
+            }),
           },
         }}
       >
-        <Toolbar />
-        <Box sx={{ overflow: 'auto' }}>
-          {!isMobile && (
-            <Box sx={{ display: 'flex', justifyContent: 'flex-end', p: 1 }}>
-              <IconButton onClick={handleDrawerToggle}>
-                <ChevronLeftIcon />
-              </IconButton>
-            </Box>
+        <Box sx={{ 
+          height: 64, 
+          display: 'flex', 
+          alignItems: 'center', 
+          px: 2,
+          justifyContent: open ? 'space-between' : 'center'
+        }}>
+          {open && (
+            <Typography variant="h6" noWrap component="div" sx={{ fontWeight: 'bold' }}>
+              PrintiFy
+            </Typography>
           )}
           
-          <Divider />
-          <List>
-            {navItems.map((item) => (
-              <ListItem
-                button
-                key={item.text}
+          {!isMobile && (
+            <IconButton onClick={handleDrawerToggle} sx={{ color: 'white' }}>
+              <ChevronLeftIcon />
+            </IconButton>
+          )}
+        </Box>
+        
+        <Divider sx={{ bgcolor: 'rgba(255,255,255,0.1)' }} />
+        
+        <Box sx={{ 
+          mt: 2, 
+          mb: 2, 
+          display: 'flex', 
+          flexDirection: 'column', 
+          alignItems: open ? 'flex-start' : 'center',
+          px: open ? 2 : 0
+        }}>
+          <Avatar
+            alt={user?.name || 'Admin'}
+            src=""
+            sx={{ 
+              width: open ? 80 : 40, 
+              height: open ? 80 : 40, 
+              bgcolor: 'white',
+              color: '#000',
+              fontWeight: 'bold',
+              mb: 1
+            }}
+          >
+            {user?.name?.charAt(0)?.toUpperCase() || 'A'}
+          </Avatar>
+          
+          {open && (
+            <>
+              <Typography variant="h6" sx={{ fontWeight: '500', color: 'white', mt: 1 }}>
+                {user?.name || 'Admin User'}
+              </Typography>
+              <Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.7)', mb: 1 }}>
+                {user?.email || 'admin@printify.com'}
+              </Typography>
+              <Chip
+                label={user?.role === 'master' ? 'Master Admin' : 'Admin'}
+                size="small"
+                sx={{ 
+                  fontWeight: 'bold',
+                  bgcolor: user?.role === 'master' ? 'secondary.main' : 'primary.main',
+                  color: 'white'
+                }}
+              />
+            </>
+          )}
+        </Box>
+        
+        <Divider sx={{ bgcolor: 'rgba(255,255,255,0.1)' }} />
+        
+        <List sx={{ px: open ? 1 : 0 }}>
+          {navItems.map((item) => (
+            <ListItem key={item.text} disablePadding sx={{ 
+              display: 'block',
+              mb: 0.5
+            }}>
+              <ListItemButton
                 onClick={() => navigate(item.path)}
                 selected={isActivePath(item.path)}
                 sx={{
+                  minHeight: 48,
+                  justifyContent: open ? 'initial' : 'center',
+                  px: 2.5,
+                  borderRadius: 1,
                   '&.Mui-selected': {
-                    backgroundColor: 'rgba(0, 120, 212, 0.1)',
+                    bgcolor: 'rgba(255,255,255,0.15)',
                     '&:hover': {
-                      backgroundColor: 'rgba(0, 120, 212, 0.2)',
+                      bgcolor: 'rgba(255,255,255,0.25)',
                     },
+                  },
+                  '&:hover': {
+                    bgcolor: 'rgba(255,255,255,0.1)',
                   },
                 }}
               >
-                <ListItemIcon>{item.icon}</ListItemIcon>
-                <ListItemText primary={item.text} />
-              </ListItem>
-            ))}
-          </List>
-          <Divider />
-          <List>
-            <ListItem button onClick={() => navigate('/dashboard')}>
-              <ListItemIcon>
+                <ListItemIcon
+                  sx={{
+                    minWidth: 0,
+                    mr: open ? 2 : 'auto',
+                    justifyContent: 'center',
+                    color: 'white'
+                  }}
+                >
+                  {item.icon}
+                </ListItemIcon>
+                {open && <ListItemText primary={item.text} />}
+              </ListItemButton>
+            </ListItem>
+          ))}
+        </List>
+        
+        <Divider sx={{ bgcolor: 'rgba(255,255,255,0.1)', mt: 'auto' }} />
+        
+        <List sx={{ px: open ? 1 : 0 }}>
+          <ListItem disablePadding sx={{ display: 'block' }}>
+            <ListItemButton
+              onClick={() => navigate('/dashboard')}
+              sx={{
+                minHeight: 48,
+                justifyContent: open ? 'initial' : 'center',
+                px: 2.5,
+                borderRadius: 1,
+                '&:hover': {
+                  bgcolor: 'rgba(255,255,255,0.1)',
+                },
+              }}
+            >
+              <ListItemIcon
+                sx={{
+                  minWidth: 0,
+                  mr: open ? 2 : 'auto',
+                  justifyContent: 'center',
+                  color: 'white'
+                }}
+              >
                 <PersonIcon />
               </ListItemIcon>
-              <ListItemText primary="User Dashboard" />
-            </ListItem>
-            <ListItem button onClick={handleLogout}>
-              <ListItemIcon>
+              {open && <ListItemText primary="User Dashboard" />}
+            </ListItemButton>
+          </ListItem>
+          
+          <ListItem disablePadding sx={{ display: 'block' }}>
+            <ListItemButton
+              onClick={handleLogout}
+              sx={{
+                minHeight: 48,
+                justifyContent: open ? 'initial' : 'center',
+                px: 2.5,
+                borderRadius: 1,
+                '&:hover': {
+                  bgcolor: 'rgba(255,255,255,0.1)',
+                },
+              }}
+            >
+              <ListItemIcon
+                sx={{
+                  minWidth: 0,
+                  mr: open ? 2 : 'auto',
+                  justifyContent: 'center',
+                  color: 'white'
+                }}
+              >
                 <LogoutIcon />
               </ListItemIcon>
-              <ListItemText primary="Logout" />
-            </ListItem>
-          </List>
-        </Box>
+              {open && <ListItemText primary={<Typography color="error.light">Logout</Typography>} />}
+            </ListItemButton>
+          </ListItem>
+        </List>
       </Drawer>
 
       {/* Main content */}
@@ -285,12 +449,13 @@ const AdminLayout = () => {
         sx={{
           flexGrow: 1,
           p: 3,
-          width: { sm: `calc(100% - ${open ? drawerWidth : 0}px)` },
-          ml: { sm: `${open ? drawerWidth : 0}px` },
+          width: { sm: `calc(100% - ${open ? drawerWidth : collapsedDrawerWidth}px)` },
           transition: theme.transitions.create(['width', 'margin'], {
             easing: theme.transitions.easing.sharp,
             duration: theme.transitions.duration.leavingScreen,
           }),
+          ml: { xs: 0, sm: `${collapsedDrawerWidth}px` },
+          bgcolor: '#fafafa',
         }}
       >
         <Toolbar />

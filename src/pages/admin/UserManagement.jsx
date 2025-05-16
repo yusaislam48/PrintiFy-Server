@@ -26,7 +26,11 @@ import {
   FormControl,
   InputLabel,
   Select,
-  MenuItem
+  MenuItem,
+  InputAdornment,
+  OutlinedInput,
+  useTheme,
+  Grid
 } from '@mui/material';
 import {
   Edit as EditIcon,
@@ -34,7 +38,8 @@ import {
   Add as AddIcon,
   AddCircle as AddCircleIcon,
   Search as SearchIcon,
-  Refresh as RefreshIcon
+  Refresh as RefreshIcon,
+  FilterList as FilterIcon
 } from '@mui/icons-material';
 import { adminAPI } from '../../utils/api';
 
@@ -49,6 +54,7 @@ const UserManagement = () => {
   const [editDialogOpen, setEditDialogOpen] = useState(false);
   const [pointsDialogOpen, setPointsDialogOpen] = useState(false);
   const [pointsToAdd, setPointsToAdd] = useState(0);
+  const [searchQuery, setSearchQuery] = useState('');
   const [editFormData, setEditFormData] = useState({
     name: '',
     email: '',
@@ -62,6 +68,7 @@ const UserManagement = () => {
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   const [userRole, setUserRole] = useState('');
+  const theme = useTheme();
 
   // Fetch current user to determine role
   useEffect(() => {
@@ -200,7 +207,7 @@ const UserManagement = () => {
     }
   };
 
-  // Add points to user
+  // Add points to a user
   const handleOpenPointsDialog = (user) => {
     setSelectedUser(user);
     setPointsToAdd(0);
@@ -211,20 +218,16 @@ const UserManagement = () => {
     try {
       setLoading(true);
       
-      if (!pointsToAdd || isNaN(pointsToAdd) || pointsToAdd <= 0) {
-        setError('Please enter a valid number of points');
-        setLoading(false);
-        return;
-      }
-      
-      const response = await adminAPI.addPointsToUser(selectedUser._id, pointsToAdd);
+      await adminAPI.addPointsToUser(selectedUser._id, pointsToAdd);
       
       // Update the user in the local state
       setUsers(users.map(user => 
-        user._id === selectedUser._id ? { ...user, points: response.user.points } : user
+        user._id === selectedUser._id 
+          ? { ...user, points: user.points + Number(pointsToAdd) } 
+          : user
       ));
       
-      setSuccess(`${pointsToAdd} points added to ${selectedUser.name} successfully`);
+      setSuccess(`${pointsToAdd} points added to ${selectedUser.name}`);
       setPointsDialogOpen(false);
       
       // Clear success message after 3 seconds
@@ -249,125 +252,246 @@ const UserManagement = () => {
     return new Date(dateString).toLocaleDateString(undefined, options);
   };
 
-  // Get color for role
+  // Get role color
   const getRoleColor = (role) => {
     switch (role) {
-      case 'admin': return 'primary';
       case 'master': return 'secondary';
+      case 'admin': return 'primary';
       default: return 'default';
     }
   };
 
+  if (loading && users.length === 0) {
+    return (
+      <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '80vh' }}>
+        <CircularProgress sx={{ color: '#000' }} />
+      </Box>
+    );
+  }
+
   return (
-    <Container maxWidth="lg" sx={{ mt: 4, mb: 4 }}>
-      <Paper sx={{ p: 2, mb: 3 }}>
-        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
-          <Typography variant="h5" component="h1">
-            User Management
-          </Typography>
-          
-          <Box>
-            <Button 
-              startIcon={<RefreshIcon />} 
-              onClick={fetchUsers} 
-              sx={{ ml: 1 }}
+    <Container maxWidth="xl" sx={{ mt: 2, mb: 4 }}>
+      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
+        <Typography variant="h4" sx={{ fontWeight: '500', color: '#000' }}>
+          User Management
+        </Typography>
+        <Button
+          variant="contained"
+          startIcon={<AddIcon />}
+          onClick={() => { /* handle add user */ }}
+          sx={{ 
+            bgcolor: '#000', 
+            '&:hover': { bgcolor: '#333' }, 
+            textTransform: 'none',
+            borderRadius: 1
+          }}
+        >
+          Add User
+        </Button>
+      </Box>
+      
+      {/* Success Message */}
+      {success && (
+        <Alert 
+          severity="success" 
+          sx={{ 
+            mb: 2, 
+            borderRadius: 1,
+            '& .MuiAlert-icon': { color: '#000' },
+            '& .MuiAlert-message': { fontWeight: '500' }
+          }}
+        >
+          {success}
+        </Alert>
+      )}
+      
+      {/* Error Message */}
+      {error && (
+        <Alert 
+          severity="error" 
+          sx={{ 
+            mb: 2, 
+            borderRadius: 1,
+            '& .MuiAlert-message': { fontWeight: '500' }
+          }}
+        >
+          {error}
+          <Button 
+            size="small" 
+            onClick={fetchUsers} 
+            sx={{ ml: 2, color: '#000', fontWeight: '500' }}
+          >
+            Retry
+          </Button>
+        </Alert>
+      )}
+      
+      {/* Search and filters */}
+      <Paper 
+        elevation={0}
+        sx={{ 
+          p: 2, 
+          mb: 3, 
+          borderRadius: 2, 
+          border: '1px solid', 
+          borderColor: 'divider',
+          bgcolor: '#fff' 
+        }}
+      >
+        <Grid container spacing={2} alignItems="center">
+          <Grid item xs={12} sm={6}>
+            <FormControl fullWidth variant="outlined" size="small">
+              <OutlinedInput
+                placeholder="Search by name, email, or student ID..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                startAdornment={
+                  <InputAdornment position="start">
+                    <SearchIcon sx={{ color: 'text.secondary' }} />
+                  </InputAdornment>
+                }
+              />
+            </FormControl>
+          </Grid>
+          <Grid item xs={6} sm={3}>
+            <Button
+              fullWidth
+              variant="outlined"
+              startIcon={<FilterIcon />}
+              sx={{ 
+                color: '#000', 
+                borderColor: '#000',
+                '&:hover': { borderColor: '#000', bgcolor: 'rgba(0,0,0,0.04)' },
+                textTransform: 'none',
+                borderRadius: 1,
+                height: '40px'
+              }}
+            >
+              Filter
+            </Button>
+          </Grid>
+          <Grid item xs={6} sm={3}>
+            <Button
+              fullWidth
+              variant="outlined"
+              startIcon={<RefreshIcon />}
+              onClick={fetchUsers}
+              sx={{ 
+                color: '#000', 
+                borderColor: '#000',
+                '&:hover': { borderColor: '#000', bgcolor: 'rgba(0,0,0,0.04)' },
+                textTransform: 'none',
+                borderRadius: 1,
+                height: '40px'
+              }}
             >
               Refresh
             </Button>
-          </Box>
-        </Box>
-        
-        {error && (
-          <Alert severity="error" sx={{ mb: 3 }}>
-            {error}
-          </Alert>
-        )}
-        
-        {success && (
-          <Alert severity="success" sx={{ mb: 3 }}>
-            {success}
-          </Alert>
-        )}
-        
+          </Grid>
+        </Grid>
+      </Paper>
+      
+      {/* Users Table */}
+      <Paper 
+        elevation={0}
+        sx={{ 
+          p: 0, 
+          borderRadius: 2, 
+          border: '1px solid', 
+          borderColor: 'divider',
+          overflow: 'hidden',
+          bgcolor: '#fff'
+        }}
+      >
         <TableContainer>
           <Table>
             <TableHead>
-              <TableRow>
-                <TableCell>Name</TableCell>
-                <TableCell>Email</TableCell>
-                <TableCell>Student ID</TableCell>
-                <TableCell>Role</TableCell>
-                <TableCell>Points</TableCell>
-                <TableCell>Verified</TableCell>
-                <TableCell>Joined</TableCell>
-                <TableCell>Actions</TableCell>
+              <TableRow sx={{ bgcolor: 'rgba(0,0,0,0.02)' }}>
+                <TableCell sx={{ fontWeight: '600', color: '#000' }}>Name</TableCell>
+                <TableCell sx={{ fontWeight: '600', color: '#000' }}>Email</TableCell>
+                <TableCell sx={{ fontWeight: '600', color: '#000' }}>Student ID</TableCell>
+                <TableCell sx={{ fontWeight: '600', color: '#000' }}>Role</TableCell>
+                <TableCell sx={{ fontWeight: '600', color: '#000' }}>Points</TableCell>
+                <TableCell sx={{ fontWeight: '600', color: '#000' }}>Joined Date</TableCell>
+                <TableCell sx={{ fontWeight: '600', color: '#000' }}>Status</TableCell>
+                <TableCell sx={{ fontWeight: '600', color: '#000' }}>Actions</TableCell>
               </TableRow>
             </TableHead>
             <TableBody>
-              {loading && page === 0 ? (
-                <TableRow>
-                  <TableCell colSpan={8} align="center">
-                    <CircularProgress size={24} sx={{ my: 2 }} />
-                  </TableCell>
-                </TableRow>
-              ) : users.length > 0 ? (
+              {users.length > 0 ? (
                 users.map((user) => (
-                  <TableRow key={user._id} hover>
-                    <TableCell>{user.name}</TableCell>
+                  <TableRow 
+                    key={user._id}
+                    sx={{ '&:hover': { bgcolor: 'rgba(0,0,0,0.02)' }, position: 'relative' }}
+                  >
+                    <TableCell sx={{ fontWeight: '500' }}>{user.name}</TableCell>
                     <TableCell>{user.email}</TableCell>
                     <TableCell>{user.studentId}</TableCell>
                     <TableCell>
-                      <Chip 
-                        label={user.role}
-                        color={getRoleColor(user.role)}
+                      <Chip
+                        label={user.role.charAt(0).toUpperCase() + user.role.slice(1)}
                         size="small"
+                        sx={{ 
+                          fontWeight: '500',
+                          bgcolor: user.role === 'master' ? 'secondary.main' : (user.role === 'admin' ? 'primary.main' : 'rgba(0,0,0,0.08)'),
+                          color: user.role === 'user' ? 'text.primary' : 'white'
+                        }}
                       />
                     </TableCell>
-                    <TableCell>{user.points}</TableCell>
                     <TableCell>
-                      <Chip 
-                        label={user.isVerified ? 'Verified' : 'Unverified'}
-                        color={user.isVerified ? 'success' : 'warning'}
-                        size="small"
-                      />
+                      <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                        {user.points}
+                        <Tooltip title="Add Points">
+                          <IconButton 
+                            size="small" 
+                            onClick={() => handleOpenPointsDialog(user)}
+                            sx={{ ml: 1, color: '#000' }}
+                          >
+                            <AddCircleIcon fontSize="small" />
+                          </IconButton>
+                        </Tooltip>
+                      </Box>
                     </TableCell>
                     <TableCell>{formatDate(user.createdAt)}</TableCell>
                     <TableCell>
-                      <Tooltip title="Edit User">
+                      <Chip
+                        label={user.isVerified ? "Verified" : "Unverified"}
+                        size="small"
+                        color={user.isVerified ? "success" : "warning"}
+                        variant="outlined"
+                        sx={{ fontWeight: '500' }}
+                      />
+                    </TableCell>
+                    <TableCell>
+                      <Box sx={{ display: 'flex' }}>
                         <IconButton 
+                          aria-label="edit" 
                           size="small" 
-                          color="primary"
                           onClick={() => handleOpenEditDialog(user)}
+                          sx={{ color: '#000' }}
                         >
                           <EditIcon fontSize="small" />
                         </IconButton>
-                      </Tooltip>
-                      
-                      <Tooltip title="Delete User">
                         <IconButton 
+                          aria-label="delete" 
                           size="small" 
-                          color="error"
                           onClick={() => handleOpenDeleteDialog(user)}
+                          sx={{ color: theme.palette.error.main }}
+                          disabled={user.role === 'master' && userRole !== 'master'}
                         >
                           <DeleteIcon fontSize="small" />
                         </IconButton>
-                      </Tooltip>
-                      
-                      <Tooltip title="Add Points">
-                        <IconButton 
-                          size="small" 
-                          color="success"
-                          onClick={() => handleOpenPointsDialog(user)}
-                        >
-                          <AddCircleIcon fontSize="small" />
-                        </IconButton>
-                      </Tooltip>
+                      </Box>
                     </TableCell>
                   </TableRow>
                 ))
               ) : (
                 <TableRow>
-                  <TableCell colSpan={8} align="center">No users found</TableCell>
+                  <TableCell colSpan={8} align="center">
+                    <Typography variant="body1" sx={{ py: 4, color: 'text.secondary' }}>
+                      No users found.
+                    </Typography>
+                  </TableCell>
                 </TableRow>
               )}
             </TableBody>
@@ -382,62 +506,82 @@ const UserManagement = () => {
           page={page}
           onPageChange={handleChangePage}
           onRowsPerPageChange={handleChangeRowsPerPage}
+          sx={{
+            borderTop: '1px solid',
+            borderColor: 'divider',
+            '.MuiTablePagination-selectLabel, .MuiTablePagination-displayedRows': {
+              fontWeight: '500'
+            }
+          }}
         />
       </Paper>
       
       {/* Edit User Dialog */}
-      <Dialog open={editDialogOpen} onClose={() => setEditDialogOpen(false)} maxWidth="sm" fullWidth>
-        <DialogTitle>Edit User</DialogTitle>
-        <DialogContent>
+      <Dialog 
+        open={editDialogOpen} 
+        onClose={() => setEditDialogOpen(false)}
+        maxWidth="sm"
+        fullWidth
+        PaperProps={{
+          sx: {
+            borderRadius: 2,
+            boxShadow: '0 8px 24px rgba(0,0,0,0.15)'
+          }
+        }}
+      >
+        <DialogTitle sx={{ fontWeight: '500', pb: 1 }}>
+          Edit User
+        </DialogTitle>
+        <DialogContent dividers>
           <TextField
+            autoFocus
+            fullWidth
             margin="dense"
             label="Name"
             name="name"
             value={editFormData.name}
             onChange={handleEditFormChange}
-            fullWidth
-            variant="outlined"
+            sx={{ mb: 2 }}
           />
           <TextField
+            fullWidth
             margin="dense"
             label="Email"
             name="email"
             type="email"
             value={editFormData.email}
             onChange={handleEditFormChange}
-            fullWidth
-            variant="outlined"
+            sx={{ mb: 2 }}
           />
           <TextField
+            fullWidth
             margin="dense"
             label="Student ID"
             name="studentId"
             value={editFormData.studentId}
             onChange={handleEditFormChange}
-            fullWidth
-            variant="outlined"
+            sx={{ mb: 2 }}
           />
           <TextField
+            fullWidth
             margin="dense"
             label="Phone"
             name="phone"
             value={editFormData.phone}
             onChange={handleEditFormChange}
-            fullWidth
-            variant="outlined"
+            sx={{ mb: 2 }}
           />
           <TextField
+            fullWidth
             margin="dense"
             label="Points"
             name="points"
             type="number"
             value={editFormData.points}
             onChange={handleEditFormChange}
-            fullWidth
-            variant="outlined"
+            sx={{ mb: 2 }}
           />
-          
-          <FormControl fullWidth margin="dense">
+          <FormControl fullWidth margin="dense" sx={{ mb: 2 }}>
             <InputLabel>Role</InputLabel>
             <Select
               name="role"
@@ -454,7 +598,7 @@ const UserManagement = () => {
             </Select>
           </FormControl>
           
-          <FormControl fullWidth margin="dense">
+          <FormControl fullWidth margin="dense" sx={{ mb: 2 }}>
             <InputLabel>Verified Status</InputLabel>
             <Select
               name="isVerified"
@@ -480,54 +624,118 @@ const UserManagement = () => {
             </Select>
           </FormControl>
         </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setEditDialogOpen(false)}>Cancel</Button>
-          <Button onClick={handleSubmitEdit} variant="contained" color="primary" disabled={loading}>
+        <DialogActions sx={{ px: 3, py: 2 }}>
+          <Button 
+            onClick={() => setEditDialogOpen(false)}
+            sx={{ color: 'text.secondary', fontWeight: '500' }}
+          >
+            Cancel
+          </Button>
+          <Button 
+            onClick={handleSubmitEdit} 
+            variant="contained" 
+            disabled={loading}
+            sx={{ 
+              bgcolor: '#000', 
+              '&:hover': { bgcolor: '#333' }, 
+              fontWeight: '500',
+              textTransform: 'none',
+              borderRadius: 1
+            }}
+          >
             {loading ? <CircularProgress size={24} /> : 'Save Changes'}
           </Button>
         </DialogActions>
       </Dialog>
       
       {/* Delete User Dialog */}
-      <Dialog open={deleteDialogOpen} onClose={() => setDeleteDialogOpen(false)}>
-        <DialogTitle>Delete User</DialogTitle>
+      <Dialog
+        open={deleteDialogOpen}
+        onClose={() => setDeleteDialogOpen(false)}
+        PaperProps={{
+          sx: {
+            borderRadius: 2,
+            boxShadow: '0 8px 24px rgba(0,0,0,0.15)'
+          }
+        }}
+      >
+        <DialogTitle sx={{ fontWeight: '500', color: theme.palette.error.main }}>
+          Delete User
+        </DialogTitle>
         <DialogContent>
           <DialogContentText>
-            Are you sure you want to delete the user "{selectedUser?.name}"? This action cannot be undone.
-            All of their print jobs will also be deleted.
+            Are you sure you want to delete user <strong>{selectedUser?.name}</strong>? This action cannot be undone and will remove all data associated with this user.
           </DialogContentText>
         </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setDeleteDialogOpen(false)}>Cancel</Button>
-          <Button onClick={handleDeleteUser} variant="contained" color="error" disabled={loading}>
-            {loading ? <CircularProgress size={24} /> : 'Delete'}
+        <DialogActions sx={{ px: 3, py: 2 }}>
+          <Button 
+            onClick={() => setDeleteDialogOpen(false)}
+            sx={{ color: 'text.secondary', fontWeight: '500' }}
+          >
+            Cancel
+          </Button>
+          <Button 
+            onClick={handleDeleteUser}
+            color="error"
+            variant="contained"
+            sx={{ fontWeight: '500', textTransform: 'none', borderRadius: 1 }}
+          >
+            Delete User
           </Button>
         </DialogActions>
       </Dialog>
       
       {/* Add Points Dialog */}
-      <Dialog open={pointsDialogOpen} onClose={() => setPointsDialogOpen(false)}>
-        <DialogTitle>Add Points to User</DialogTitle>
+      <Dialog
+        open={pointsDialogOpen}
+        onClose={() => setPointsDialogOpen(false)}
+        PaperProps={{
+          sx: {
+            borderRadius: 2,
+            boxShadow: '0 8px 24px rgba(0,0,0,0.15)'
+          }
+        }}
+      >
+        <DialogTitle sx={{ fontWeight: '500' }}>
+          Add Points to {selectedUser?.name}
+        </DialogTitle>
         <DialogContent>
-          <DialogContentText>
-            Add points to {selectedUser?.name}'s account. Current points: {selectedUser?.points}
-          </DialogContentText>
+          <Typography variant="body2" color="text.secondary" gutterBottom>
+            Current points balance: <strong>{selectedUser?.points}</strong>
+          </Typography>
           <TextField
             autoFocus
+            fullWidth
             margin="dense"
             label="Points to Add"
             type="number"
-            fullWidth
-            variant="outlined"
             value={pointsToAdd}
-            onChange={(e) => setPointsToAdd(parseInt(e.target.value) || 0)}
-            InputProps={{ inputProps: { min: 1 } }}
+            onChange={(e) => setPointsToAdd(e.target.value)}
+            InputProps={{
+              inputProps: { min: 1 }
+            }}
           />
         </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setPointsDialogOpen(false)}>Cancel</Button>
-          <Button onClick={handleAddPoints} variant="contained" color="success" disabled={loading || pointsToAdd <= 0}>
-            {loading ? <CircularProgress size={24} /> : 'Add Points'}
+        <DialogActions sx={{ px: 3, py: 2 }}>
+          <Button 
+            onClick={() => setPointsDialogOpen(false)}
+            sx={{ color: 'text.secondary', fontWeight: '500' }}
+          >
+            Cancel
+          </Button>
+          <Button 
+            onClick={handleAddPoints} 
+            variant="contained" 
+            disabled={loading || pointsToAdd <= 0}
+            sx={{ 
+              bgcolor: '#000', 
+              '&:hover': { bgcolor: '#333' }, 
+              fontWeight: '500',
+              textTransform: 'none',
+              borderRadius: 1
+            }}
+          >
+            Add Points
           </Button>
         </DialogActions>
       </Dialog>

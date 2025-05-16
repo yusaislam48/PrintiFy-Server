@@ -17,7 +17,10 @@ import {
   CircularProgress,
   Button,
   Divider,
-  Chip
+  Chip,
+  IconButton,
+  useTheme,
+  useMediaQuery
 } from '@mui/material';
 import { 
   People as PeopleIcon, 
@@ -25,7 +28,9 @@ import {
   Pending as PendingIcon, 
   CheckCircle as CheckCircleIcon,
   Cancel as CancelIcon,
-  LocalPrintshop as LocalPrintshopIcon
+  LocalPrintshop as LocalPrintshopIcon,
+  Refresh as RefreshIcon,
+  ArrowForward as ArrowForwardIcon
 } from '@mui/icons-material';
 import { adminAPI } from '../../utils/api';
 import { useNavigate } from 'react-router-dom';
@@ -44,6 +49,8 @@ const AdminDashboard = () => {
   const [recentPrintJobs, setRecentPrintJobs] = useState([]);
   const [error, setError] = useState('');
   const navigate = useNavigate();
+  const theme = useTheme();
+  const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
 
   useEffect(() => {
     fetchDashboardData();
@@ -92,25 +99,47 @@ const AdminDashboard = () => {
   if (loading) {
     return (
       <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh' }}>
-        <CircularProgress />
+        <CircularProgress sx={{ color: '#000' }} />
       </Box>
     );
   }
 
   return (
-    <Container maxWidth="lg" sx={{ mt: 4, mb: 4 }}>
-      <Typography variant="h4" gutterBottom>
-        Admin Dashboard
-      </Typography>
+    <Container maxWidth="xl" sx={{ mt: 2, mb: 4 }}>
+      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
+        <Typography variant="h4" sx={{ fontWeight: '500', color: '#000' }}>
+          Admin Dashboard
+        </Typography>
+        <IconButton 
+          onClick={fetchDashboardData} 
+          sx={{ 
+            bgcolor: '#000', 
+            color: 'white',
+            '&:hover': { bgcolor: '#333' }
+          }}
+        >
+          <RefreshIcon />
+        </IconButton>
+      </Box>
       
       {error && (
-        <Paper sx={{ p: 2, mb: 3, bgcolor: 'error.light' }}>
+        <Paper 
+          elevation={0}
+          sx={{ 
+            p: 2, 
+            mb: 3, 
+            bgcolor: 'error.light',
+            border: '1px solid',
+            borderColor: 'error.main',
+            borderRadius: 1
+          }}
+        >
           <Typography color="error">{error}</Typography>
           <Button 
             variant="contained" 
-            color="primary" 
+            color="error" 
             onClick={fetchDashboardData} 
-            sx={{ mt: 1 }}
+            sx={{ mt: 1, bgcolor: '#000' }}
           >
             Retry
           </Button>
@@ -120,14 +149,32 @@ const AdminDashboard = () => {
       {/* Stats Cards */}
       <Grid container spacing={3} sx={{ mb: 4 }}>
         <Grid item xs={12} sm={6} md={4}>
-          <Card>
-            <CardContent sx={{ display: 'flex', alignItems: 'center' }}>
-              <PeopleIcon sx={{ fontSize: 40, color: 'primary.main', mr: 2 }} />
+          <Card 
+            elevation={0}
+            sx={{ 
+              borderRadius: 2, 
+              border: '1px solid', 
+              borderColor: 'divider',
+              height: '100%'
+            }}
+          >
+            <CardContent sx={{ display: 'flex', alignItems: 'center', height: '100%' }}>
+              <Box sx={{ 
+                mr: 2, 
+                p: 1.5, 
+                borderRadius: '50%', 
+                bgcolor: 'rgba(0,0,0,0.05)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center'
+              }}>
+                <PeopleIcon sx={{ fontSize: 40, color: '#000' }} />
+              </Box>
               <Box>
-                <Typography variant="h5" component="div">
+                <Typography variant="h4" fontWeight="500">
                   {stats.totalUsers}
                 </Typography>
-                <Typography color="text.secondary">
+                <Typography color="text.secondary" variant="body1">
                   Total Users
                 </Typography>
               </Box>
@@ -136,14 +183,32 @@ const AdminDashboard = () => {
         </Grid>
         
         <Grid item xs={12} sm={6} md={4}>
-          <Card>
-            <CardContent sx={{ display: 'flex', alignItems: 'center' }}>
-              <LocalPrintshopIcon sx={{ fontSize: 40, color: 'primary.main', mr: 2 }} />
+          <Card 
+            elevation={0}
+            sx={{ 
+              borderRadius: 2, 
+              border: '1px solid', 
+              borderColor: 'divider',
+              height: '100%'
+            }}
+          >
+            <CardContent sx={{ display: 'flex', alignItems: 'center', height: '100%' }}>
+              <Box sx={{ 
+                mr: 2, 
+                p: 1.5, 
+                borderRadius: '50%', 
+                bgcolor: 'rgba(0,0,0,0.05)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center'
+              }}>
+                <LocalPrintshopIcon sx={{ fontSize: 40, color: '#000' }} />
+              </Box>
               <Box>
-                <Typography variant="h5" component="div">
+                <Typography variant="h4" fontWeight="500">
                   {stats.totalPrintJobs}
                 </Typography>
-                <Typography color="text.secondary">
+                <Typography color="text.secondary" variant="body1">
                   Total Print Jobs
                 </Typography>
               </Box>
@@ -152,12 +217,22 @@ const AdminDashboard = () => {
         </Grid>
         
         <Grid item xs={12} sm={6} md={4}>
-          <Card>
-            <CardContent sx={{ textAlign: 'center', bgcolor: 'primary.light', color: 'white' }}>
-              <Typography variant="h5" component="div">
+          <Card 
+            elevation={0}
+            sx={{ 
+              borderRadius: 2,
+              bgcolor: '#000', 
+              color: 'white',
+              border: '1px solid',
+              borderColor: '#000',
+              height: '100%'
+            }}
+          >
+            <CardContent sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100%' }}>
+              <Typography variant="h4" fontWeight="500">
                 {stats.totalPoints.toLocaleString()}
               </Typography>
-              <Typography>
+              <Typography variant="body1" sx={{ opacity: 0.8 }}>
                 Total Points in System
               </Typography>
             </CardContent>
@@ -165,14 +240,32 @@ const AdminDashboard = () => {
         </Grid>
         
         <Grid item xs={12} sm={4}>
-          <Card>
-            <CardContent sx={{ display: 'flex', alignItems: 'center', bgcolor: 'warning.light' }}>
-              <PendingIcon sx={{ fontSize: 36, color: 'warning.dark', mr: 2 }} />
+          <Card 
+            elevation={0}
+            sx={{ 
+              borderRadius: 2,
+              border: '1px solid',
+              borderColor: theme.palette.warning.main,
+              boxShadow: '0 4px 12px rgba(255, 152, 0, 0.1)'
+            }}
+          >
+            <CardContent sx={{ display: 'flex', alignItems: 'center' }}>
+              <Box sx={{ 
+                mr: 2, 
+                p: 1.5, 
+                borderRadius: '50%', 
+                bgcolor: 'warning.light',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center'
+              }}>
+                <PendingIcon sx={{ fontSize: 36, color: 'warning.dark' }} />
+              </Box>
               <Box>
-                <Typography variant="h5" component="div">
+                <Typography variant="h5" fontWeight="500">
                   {stats.pendingJobs}
                 </Typography>
-                <Typography color="warning.dark">
+                <Typography color="warning.main" fontWeight="500">
                   Pending Jobs
                 </Typography>
               </Box>
@@ -181,14 +274,32 @@ const AdminDashboard = () => {
         </Grid>
         
         <Grid item xs={12} sm={4}>
-          <Card>
-            <CardContent sx={{ display: 'flex', alignItems: 'center', bgcolor: 'success.light' }}>
-              <CheckCircleIcon sx={{ fontSize: 36, color: 'success.dark', mr: 2 }} />
+          <Card 
+            elevation={0}
+            sx={{ 
+              borderRadius: 2,
+              border: '1px solid',
+              borderColor: theme.palette.success.main,
+              boxShadow: '0 4px 12px rgba(76, 175, 80, 0.1)'
+            }}
+          >
+            <CardContent sx={{ display: 'flex', alignItems: 'center' }}>
+              <Box sx={{ 
+                mr: 2, 
+                p: 1.5, 
+                borderRadius: '50%', 
+                bgcolor: 'success.light',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center'
+              }}>
+                <CheckCircleIcon sx={{ fontSize: 36, color: 'success.dark' }} />
+              </Box>
               <Box>
-                <Typography variant="h5" component="div">
+                <Typography variant="h5" fontWeight="500">
                   {stats.completedJobs}
                 </Typography>
-                <Typography color="success.dark">
+                <Typography color="success.main" fontWeight="500">
                   Completed Jobs
                 </Typography>
               </Box>
@@ -197,14 +308,32 @@ const AdminDashboard = () => {
         </Grid>
         
         <Grid item xs={12} sm={4}>
-          <Card>
-            <CardContent sx={{ display: 'flex', alignItems: 'center', bgcolor: 'error.light' }}>
-              <CancelIcon sx={{ fontSize: 36, color: 'error.dark', mr: 2 }} />
+          <Card 
+            elevation={0}
+            sx={{ 
+              borderRadius: 2,
+              border: '1px solid',
+              borderColor: theme.palette.error.main,
+              boxShadow: '0 4px 12px rgba(244, 67, 54, 0.1)'
+            }}
+          >
+            <CardContent sx={{ display: 'flex', alignItems: 'center' }}>
+              <Box sx={{ 
+                mr: 2, 
+                p: 1.5, 
+                borderRadius: '50%', 
+                bgcolor: 'error.light',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center'
+              }}>
+                <CancelIcon sx={{ fontSize: 36, color: 'error.dark' }} />
+              </Box>
               <Box>
-                <Typography variant="h5" component="div">
+                <Typography variant="h5" fontWeight="500">
                   {stats.cancelledJobs}
                 </Typography>
-                <Typography color="error.dark">
+                <Typography color="error.main" fontWeight="500">
                   Cancelled Jobs
                 </Typography>
               </Box>
@@ -213,18 +342,39 @@ const AdminDashboard = () => {
         </Grid>
       </Grid>
       
-      {/* Recent Users */}
+      {/* Recent Users and Print Jobs */}
       <Grid container spacing={3}>
         <Grid item xs={12} md={6}>
-          <Paper sx={{ p: 2, display: 'flex', flexDirection: 'column' }}>
+          <Paper 
+            elevation={0}
+            sx={{ 
+              p: 3, 
+              borderRadius: 2, 
+              border: '1px solid', 
+              borderColor: 'divider',
+              height: '100%'
+            }}
+          >
             <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
-              <Typography variant="h6" gutterBottom component="div">
+              <Typography variant="h6" fontWeight="500">
                 Recent Users
               </Typography>
               <Button 
-                variant="contained" 
+                variant="outlined" 
                 size="small"
+                endIcon={<ArrowForwardIcon />}
                 onClick={() => navigate('/admin/users')}
+                sx={{
+                  borderColor: '#000',
+                  color: '#000',
+                  borderRadius: 1,
+                  textTransform: 'none',
+                  fontWeight: '500',
+                  '&:hover': {
+                    bgcolor: 'rgba(0,0,0,0.05)',
+                    borderColor: '#000'
+                  }
+                }}
               >
                 View All
               </Button>
@@ -235,16 +385,22 @@ const AdminDashboard = () => {
               <Table size="small">
                 <TableHead>
                   <TableRow>
-                    <TableCell>Name</TableCell>
-                    <TableCell>Email</TableCell>
-                    <TableCell>Student ID</TableCell>
-                    <TableCell>Joined Date</TableCell>
+                    <TableCell sx={{ fontWeight: '500', color: '#000' }}>Name</TableCell>
+                    <TableCell sx={{ fontWeight: '500', color: '#000' }}>Email</TableCell>
+                    <TableCell sx={{ fontWeight: '500', color: '#000' }}>Student ID</TableCell>
+                    <TableCell sx={{ fontWeight: '500', color: '#000' }}>Joined Date</TableCell>
                   </TableRow>
                 </TableHead>
                 <TableBody>
                   {recentUsers.length > 0 ? (
                     recentUsers.map((user) => (
-                      <TableRow key={user._id}>
+                      <TableRow key={user._id} 
+                        sx={{ 
+                          '&:hover': { bgcolor: 'rgba(0,0,0,0.02)' },
+                          cursor: 'pointer'
+                        }}
+                        onClick={() => navigate(`/admin/users/${user._id}`)}
+                      >
                         <TableCell>{user.name}</TableCell>
                         <TableCell>{user.email}</TableCell>
                         <TableCell>{user.studentId}</TableCell>
@@ -264,15 +420,36 @@ const AdminDashboard = () => {
         
         {/* Recent Print Jobs */}
         <Grid item xs={12} md={6}>
-          <Paper sx={{ p: 2, display: 'flex', flexDirection: 'column' }}>
+          <Paper 
+            elevation={0}
+            sx={{ 
+              p: 3, 
+              borderRadius: 2, 
+              border: '1px solid', 
+              borderColor: 'divider',
+              height: '100%'
+            }}
+          >
             <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
-              <Typography variant="h6" gutterBottom component="div">
+              <Typography variant="h6" fontWeight="500">
                 Recent Print Jobs
               </Typography>
               <Button 
-                variant="contained" 
+                variant="outlined" 
                 size="small"
+                endIcon={<ArrowForwardIcon />}
                 onClick={() => navigate('/admin/print-jobs')}
+                sx={{
+                  borderColor: '#000',
+                  color: '#000',
+                  borderRadius: 1,
+                  textTransform: 'none',
+                  fontWeight: '500',
+                  '&:hover': {
+                    bgcolor: 'rgba(0,0,0,0.05)',
+                    borderColor: '#000'
+                  }
+                }}
               >
                 View All
               </Button>
@@ -283,25 +460,38 @@ const AdminDashboard = () => {
               <Table size="small">
                 <TableHead>
                   <TableRow>
-                    <TableCell>File Name</TableCell>
-                    <TableCell>Student</TableCell>
-                    <TableCell>Status</TableCell>
-                    <TableCell>Date</TableCell>
+                    <TableCell sx={{ fontWeight: '500', color: '#000' }}>File Name</TableCell>
+                    <TableCell sx={{ fontWeight: '500', color: '#000' }}>Student</TableCell>
+                    <TableCell sx={{ fontWeight: '500', color: '#000' }}>Status</TableCell>
+                    <TableCell sx={{ fontWeight: '500', color: '#000' }}>Date</TableCell>
                   </TableRow>
                 </TableHead>
                 <TableBody>
                   {recentPrintJobs.length > 0 ? (
                     recentPrintJobs.map((job) => (
-                      <TableRow key={job._id}>
-                        <TableCell>{job.fileName}</TableCell>
+                      <TableRow key={job._id} 
+                        sx={{ 
+                          '&:hover': { bgcolor: 'rgba(0,0,0,0.02)' },
+                          cursor: 'pointer'
+                        }}
+                        onClick={() => navigate(`/admin/print-jobs/${job._id}`)}
+                      >
+                        <TableCell sx={{ maxWidth: '200px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                          {job.fileName}
+                        </TableCell>
                         <TableCell>
                           {job.userId?.name || 'Unknown'}
                         </TableCell>
                         <TableCell>
                           <Chip 
-                            label={job.status} 
+                            label={job.status.charAt(0).toUpperCase() + job.status.slice(1)} 
                             color={getStatusColor(job.status)}
                             size="small"
+                            sx={{ 
+                              fontWeight: '500',
+                              fontSize: '0.75rem',
+                              height: '22px'
+                            }}
                           />
                         </TableCell>
                         <TableCell>{formatDate(job.createdAt)}</TableCell>
