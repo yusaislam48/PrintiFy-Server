@@ -117,14 +117,21 @@ const Register = () => {
   };
 
   return (
-    <Container maxWidth="sm" sx={{ py: 4, height: '100vh', display: 'flex', alignItems: 'center' }}>
+    <Box sx={{ 
+      display: 'flex', 
+      minHeight: '100vh', 
+      alignItems: 'center', 
+      justifyContent: 'center',
+      backgroundColor: '#f5f7fa'
+    }}>
+      <Container maxWidth="sm" sx={{ py: 4 }}>
       <Paper
-        elevation={1}
+          elevation={2}
         sx={{
           width: '100%',
           p: { xs: 3, sm: 4 },
-          borderRadius: 2,
-          border: '1px solid #eaeaea',
+            borderRadius: 3,
+            boxShadow: '0 6px 20px rgba(0,0,0,0.08)'
         }}
       >
         <Box
@@ -136,22 +143,30 @@ const Register = () => {
             gap: 3,
           }}
         >
+            <Box sx={{ textAlign: 'center', mb: 2 }}>
           <Typography variant="h4" component="h1" fontWeight="bold" gutterBottom>
             Create an account
           </Typography>
           
-          <Typography variant="body1" color="text.secondary" gutterBottom>
-            Enter your details below to create your account
+              <Typography variant="body1" color="text.secondary">
+                Join PrintiFy to start sending your print jobs
           </Typography>
+            </Box>
           
-          {error && <Alert severity="error">{error}</Alert>}
+            {error && <Alert severity="error" sx={{ borderRadius: 2 }}>{error}</Alert>}
           
           <Stack direction="row" spacing={2}>
             <Button
               variant="outlined"
               fullWidth
               startIcon={<GitHubIcon />}
-              sx={{ py: 1.5, textTransform: 'none', borderColor: '#e0e0e0', color: 'text.primary' }}
+                sx={{ 
+                  py: 1.5, 
+                  textTransform: 'none', 
+                  borderColor: '#e0e0e0', 
+                  color: 'text.primary',
+                  borderRadius: 2
+                }}
             >
               GitHub
             </Button>
@@ -159,7 +174,13 @@ const Register = () => {
               variant="outlined"
               fullWidth
               startIcon={<GoogleIcon />}
-              sx={{ py: 1.5, textTransform: 'none', borderColor: '#e0e0e0', color: 'text.primary' }}
+                sx={{ 
+                  py: 1.5, 
+                  textTransform: 'none', 
+                  borderColor: '#e0e0e0', 
+                  color: 'text.primary',
+                  borderRadius: 2
+                }}
             >
               Google
             </Button>
@@ -198,7 +219,7 @@ const Register = () => {
           <TextField
             fullWidth
             name="studentId"
-            placeholder="2030576"
+              placeholder="1234567"
             variant="outlined"
             size="medium"
             value={formData.studentId}
@@ -217,25 +238,17 @@ const Register = () => {
           <TextField
             fullWidth
             name="email"
+              disabled
             variant="outlined"
             size="medium"
             value={formData.email}
-            disabled
             InputProps={{
               readOnly: true,
-              endAdornment: (
-                <InputAdornment position="end">
-                  <Typography variant="caption" color="text.secondary">
-                    Auto-generated
-                  </Typography>
-                </InputAdornment>
-              ),
             }}
             sx={{ 
               mt: -1,
               '& .MuiOutlinedInput-root': {
                 borderRadius: '8px',
-                bgcolor: 'rgba(0, 0, 0, 0.04)',
               }
             }}
           />
@@ -306,13 +319,13 @@ const Register = () => {
             sx={{
               py: 1.5,
               mt: 1,
-              bgcolor: '#111',
+                bgcolor: '#1a237e',
               color: '#fff',
               textTransform: 'none',
               fontWeight: 'medium',
               borderRadius: '8px',
               '&:hover': {
-                bgcolor: '#333',
+                  bgcolor: '#303f9f',
               },
             }}
           >
@@ -334,6 +347,7 @@ const Register = () => {
         </Box>
       </Paper>
     </Container>
+    </Box>
   );
 };
 
