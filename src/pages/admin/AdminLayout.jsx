@@ -31,7 +31,8 @@ import {
   PointOfSale as PointsIcon,
   ChevronLeft as ChevronLeftIcon,
   Person as PersonIcon,
-  SupervisorAccount as AdminIcon
+  SupervisorAccount as AdminIcon,
+  History as HistoryIcon
 } from '@mui/icons-material';
 import { authAPI } from '../../utils/api';
 
@@ -106,6 +107,7 @@ const AdminLayout = () => {
     { text: 'Dashboard', icon: <DashboardIcon />, path: '/admin' },
     { text: 'Users', icon: <PeopleIcon />, path: '/admin/users' },
     { text: 'Print Jobs', icon: <PrintIcon />, path: '/admin/print-jobs' },
+    { text: 'History', icon: <HistoryIcon />, path: '/admin/history' },
     { text: 'Points Management', icon: <PointsIcon />, path: '/admin/points' },
     { text: 'Settings', icon: <SettingsIcon />, path: '/admin/settings' },
   ];

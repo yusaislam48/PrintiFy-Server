@@ -16,6 +16,7 @@ import UserManagement from './pages/admin/UserManagement'
 import PrintJobManagement from './pages/admin/PrintJobManagement'
 import PointsManagement from './pages/admin/PointsManagement'
 import AdminSettings from './pages/admin/AdminSettings'
+import AdminHistory from './pages/admin/AdminHistory'
 import './App.css'
 
 // Protected route component
@@ -205,6 +206,7 @@ function App() {
             <Route index element={<AdminDashboard />} />
             <Route path="users" element={<UserManagement />} />
             <Route path="print-jobs" element={<PrintJobManagement />} />
+            <Route path="history" element={<AdminHistory />} />
             <Route path="points" element={<PointsManagement />} />
             <Route path="settings" element={<AdminSettings />} />
           </Route>

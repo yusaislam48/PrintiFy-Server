@@ -455,6 +455,16 @@ export const adminAPI = {
     }
   },
 
+  // Get system history with pagination and filters
+  getSystemHistory: async (page = 1, limit = 10, type = 'all') => {
+    try {
+      const response = await api.get(`/admin/history?page=${page}&limit=${limit}&type=${type}`);
+      return response.data;
+    } catch (error) {
+      throw error.response?.data || { message: 'Failed to get system history' };
+    }
+  },
+
   // Get all users with pagination
   getAllUsers: async (page = 1, limit = 10) => {
     try {
