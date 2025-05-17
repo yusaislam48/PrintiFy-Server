@@ -268,6 +268,16 @@ export const userAPI = {
     }
   },
 
+  // Get user's print history
+  getUserHistory: async (page = 1, limit = 10) => {
+    try {
+      const response = await api.get(`/users/history?page=${page}&limit=${limit}`);
+      return response.data;
+    } catch (error) {
+      throw error.response?.data || { message: 'Failed to get user history' };
+    }
+  },
+
   // Update user
   updateUser: async (userId, userData) => {
     try {

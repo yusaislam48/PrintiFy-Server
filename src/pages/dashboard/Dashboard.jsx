@@ -505,9 +505,9 @@ const Dashboard = () => {
             [`& .MuiDrawer-paper`]: { 
               width: open ? 240 : 72, 
               boxSizing: 'border-box',
-              borderRight: '1px solid #eee',
-              height: 'calc(100vh - 64px)',
-              top: 64,
+            borderRight: '1px solid #eee',
+            height: 'calc(100vh - 64px)',
+            top: 64,
               display: { xs: open ? 'block' : 'none', sm: 'block' },
               bgcolor: 'white',
               overflowX: 'hidden',
@@ -543,33 +543,33 @@ const Dashboard = () => {
             {open && (
               <>
                 <Typography variant="h6" fontWeight="500">{user?.name || 'User'}</Typography>
-                <Typography variant="body2" color="text.secondary">
-                  {user?.email || 'user@example.com'}
-                </Typography>
-                
-                {/* Admin badge for admin users */}
-                {(user?.role === 'admin' || user?.role === 'master' || user?.isAdmin) && (
-                  <Chip
-                    label={user?.role === 'master' ? 'Master Admin' : 'Admin'}
+            <Typography variant="body2" color="text.secondary">
+              {user?.email || 'user@example.com'}
+            </Typography>
+            
+            {/* Admin badge for admin users */}
+            {(user?.role === 'admin' || user?.role === 'master' || user?.isAdmin) && (
+              <Chip
+                label={user?.role === 'master' ? 'Master Admin' : 'Admin'}
                     color="default"
                     sx={{ mt: 1, fontWeight: 'bold', mb: 1, bgcolor: '#000', color: 'white' }}
                     size="small"
-                  />
-                )}
-                
-                <Box 
-                  sx={{ 
-                    mt: 1, 
-                    p: 1, 
+              />
+            )}
+            
+            <Box 
+              sx={{ 
+                mt: 1, 
+                p: 1, 
                     bgcolor: '#000', 
-                    color: 'white',
+                color: 'white',
                     borderRadius: 1,
                     fontWeight: 'medium',
-                    fontSize: '0.875rem'
-                  }}
-                >
-                  {user?.points || 0} Points Available
-                </Box>
+                fontSize: '0.875rem'
+              }}
+            >
+              {user?.points || 0} Points Available
+            </Box>
               </>
             )}
           </Box>
@@ -647,30 +647,6 @@ const Dashboard = () => {
                 <PrintIcon />
               </ListItemIcon>
               {open && <ListItemText primary="Print Jobs" />}
-            </ListItem>
-            
-            <ListItem 
-              button
-              selected={tabValue === 4}
-              onClick={() => setTabValue(4)}
-              sx={{ 
-                borderRadius: 1,
-                mb: 0.5,
-                justifyContent: open ? 'initial' : 'center',
-                px: open ? 2 : 1,
-                '&.Mui-selected': {
-                  bgcolor: '#f0f0f0',
-                  color: 'black',
-                  '& .MuiListItemIcon-root': {
-                    color: 'black',
-                  },
-                },
-              }}
-            >
-              <ListItemIcon sx={{ minWidth: open ? 40 : 'auto', color: 'rgba(0,0,0,0.65)' }}>
-                <DescriptionIcon />
-              </ListItemIcon>
-              {open && <ListItemText primary="Templates" />}
             </ListItem>
             
             <ListItem 
@@ -773,12 +749,12 @@ const Dashboard = () => {
           <Divider sx={{ my: 2 }} />
 
           <Box sx={{ px: open ? 2 : 1 }}>
-            <Button
-              variant="outlined"
-              color="error"
+          <Button
+            variant="outlined"
+            color="error"
               startIcon={open && <LogoutIcon />}
-              fullWidth
-              onClick={handleLogout}
+            fullWidth
+            onClick={handleLogout}
               sx={{ 
                 borderRadius: 1, 
                 textTransform: 'none', 
@@ -786,9 +762,9 @@ const Dashboard = () => {
                 justifyContent: open ? 'flex-start' : 'center',
                 px: open ? 2 : 1
               }}
-            >
+          >
               {open ? 'Logout' : <LogoutIcon fontSize="small" />}
-            </Button>
+          </Button>
           </Box>
         </Drawer>
 
@@ -900,10 +876,10 @@ const Dashboard = () => {
                             borderColor: '#ddd'
                           }
                         }}
-                        onClick={() => setTabValue(4)}
+                        onClick={() => setTabValue(5)}
                       >
-                        <DescriptionIcon sx={{ fontSize: 32 }} />
-                        <Typography variant="body2">Templates</Typography>
+                        <HistoryIcon sx={{ fontSize: 32 }} />
+                        <Typography variant="body2">History</Typography>
                       </Button>
                     </Grid>
                     <Grid item xs={6}>
@@ -966,7 +942,7 @@ const Dashboard = () => {
                   ) : (
                     <>
                       <Box sx={{ display: 'flex', mb: 3, p: 1, justifyContent: 'space-between' }}>
-                        <Box sx={{ 
+                  <Box sx={{ 
                           flex: 1, 
                           borderRight: '1px solid #eee', 
                           display: 'flex', 
@@ -1233,7 +1209,7 @@ const Dashboard = () => {
                       sx={{ 
                         width: 100, 
                         height: 100, 
-                        mb: 2,
+                        mb: 2, 
                         border: '4px solid white',
                         bgcolor: '#bdbdbd',
                         fontSize: 40
@@ -1296,7 +1272,7 @@ const Dashboard = () => {
                     </Box>
                     
                     <Box sx={{ 
-                      width: '100%', 
+                      width: '100%',
                       bgcolor: '#f5f5f5', 
                       p: 3, 
                       borderRadius: 1,
@@ -1327,7 +1303,7 @@ const Dashboard = () => {
                   </Box>
                 </Paper>
               </Grid>
-              
+
               {/* Additional Profile Info */}
               <Grid item xs={12} md={7}>
                 <Grid container spacing={3}>
@@ -1335,7 +1311,7 @@ const Dashboard = () => {
                     <Paper elevation={0} sx={{ p: 3, borderRadius: 1, border: '1px solid #eee' }}>
                       <Typography variant="h6" fontWeight="medium" gutterBottom>
                         Account Information
-                      </Typography>
+                  </Typography>
                       <Divider sx={{ mb: 2 }} />
                       
                       <Typography variant="body2" color="text.secondary" gutterBottom>
@@ -1357,15 +1333,15 @@ const Dashboard = () => {
                         >
                           Edit Profile
                         </Button>
-                      </Box>
+                    </Box>
                     </Paper>
-                  </Grid>
-                  
+                      </Grid>
+                      
                   <Grid item xs={12}>
                     <Paper elevation={0} sx={{ p: 3, borderRadius: 1, border: '1px solid #eee' }}>
                       <Typography variant="h6" fontWeight="medium" gutterBottom>
                         Printing Summary
-                      </Typography>
+                            </Typography>
                       <Divider sx={{ mb: 2 }} />
                       
                       <Grid container spacing={3}>
@@ -1378,8 +1354,8 @@ const Dashboard = () => {
                               Total Print Jobs
                             </Typography>
                           </Box>
-                        </Grid>
-                        
+                      </Grid>
+                      
                         <Grid item xs={6}>
                           <Box sx={{ textAlign: 'center', p: 2 }}>
                             <Typography variant="h4" fontWeight="medium">
@@ -1389,9 +1365,9 @@ const Dashboard = () => {
                               Points Used
                             </Typography>
                           </Box>
-                        </Grid>
                       </Grid>
-                      
+              </Grid>
+              
                       <Button 
                         fullWidth 
                         variant="outlined"
@@ -1407,36 +1383,36 @@ const Dashboard = () => {
                     <Paper elevation={0} sx={{ p: 3, borderRadius: 1, border: '1px solid #eee' }}>
                       <Typography variant="h6" fontWeight="medium" gutterBottom>
                         Device Information
-                      </Typography>
+                                  </Typography>
                       <Divider sx={{ mb: 2 }} />
                       
                       <Box sx={{ display: 'flex', mb: 1 }}>
                         <Typography variant="body2" color="text.secondary" sx={{ width: 120 }}>
                           Last Login:
-                        </Typography>
+                          </Typography>
                         <Typography variant="body2" fontWeight="medium">
                           {formatDate(new Date())}
-                        </Typography>
-                      </Box>
-                      
+                          </Typography>
+                        </Box>
+                        
                       <Box sx={{ display: 'flex', mb: 1 }}>
                         <Typography variant="body2" color="text.secondary" sx={{ width: 120 }}>
                           Browser:
-                        </Typography>
+                          </Typography>
                         <Typography variant="body2" fontWeight="medium">
                           {navigator.userAgent.split(' ').slice(-2, -1)[0].split('/')[0]}
-                        </Typography>
-                      </Box>
-                      
+                          </Typography>
+                        </Box>
+                        
                       <Box sx={{ display: 'flex', mb: 1 }}>
                         <Typography variant="body2" color="text.secondary" sx={{ width: 120 }}>
                           Platform:
-                        </Typography>
+                          </Typography>
                         <Typography variant="body2" fontWeight="medium">
                           {navigator.platform}
-                        </Typography>
-                      </Box>
-                    </Paper>
+                          </Typography>
+                        </Box>
+                </Paper>
                   </Grid>
                 </Grid>
               </Grid>
@@ -1700,6 +1676,72 @@ const Dashboard = () => {
             </Paper>
           </TabPanel>
 
+          {/* History Tab */}
+          <TabPanel value={tabValue} index={5}>
+            <Typography variant="h4" sx={{ mb: 3, fontWeight: 'bold', color: 'black' }}>
+              Print History
+            </Typography>
+            
+            <Paper elevation={0} sx={{ p: 3, borderRadius: 1, border: '1px solid #eee' }}>
+              <Box sx={{ mb: 3 }}>
+                <Typography variant="h6" gutterBottom fontWeight="medium">
+                  Your Printing History
+                </Typography>
+                <Typography variant="body2" color="text.secondary">
+                  View your completed print jobs and points used
+                </Typography>
+              </Box>
+              
+              <Divider sx={{ mb: 3 }} />
+              
+              <TableContainer>
+                <Table>
+                  <TableHead>
+                    <TableRow>
+                      <TableCell sx={{ fontWeight: 'bold' }}>File Name</TableCell>
+                      <TableCell sx={{ fontWeight: 'bold' }}>Date Completed</TableCell>
+                      <TableCell sx={{ fontWeight: 'bold' }}>Points Used</TableCell>
+                    </TableRow>
+                  </TableHead>
+                  <TableBody>
+                    {printJobs
+                      .filter(job => job.status === 'completed')
+                      .map((job) => (
+                        <TableRow key={job._id}>
+                          <TableCell>{job.fileName}</TableCell>
+                          <TableCell>{formatDate(job.updatedAt || job.createdAt)}</TableCell>
+                          <TableCell>
+                            <Typography 
+                              variant="body2" 
+                              sx={{ 
+                                color: '#d32f2f', 
+                                fontWeight: 'medium',
+                                display: 'flex',
+                                alignItems: 'center'
+                              }}
+                            >
+                              -{job.pointCost || job.printSettings?.totalPages || 0} points
+                            </Typography>
+                          </TableCell>
+                        </TableRow>
+                      ))
+                    }
+                    
+                    {printJobs.filter(job => job.status === 'completed').length === 0 && (
+                      <TableRow>
+                        <TableCell colSpan={3} align="center" sx={{ py: 3 }}>
+                          <Typography variant="body2" color="text.secondary">
+                            No completed print jobs available
+                          </Typography>
+                        </TableCell>
+                      </TableRow>
+                    )}
+                  </TableBody>
+                </Table>
+              </TableContainer>
+            </Paper>
+          </TabPanel>
+
           {/* Settings Tab */}
           <TabPanel value={tabValue} index={7}>
             <Typography variant="h4" sx={{ mb: 3, fontWeight: 'bold', color: 'black' }}>
@@ -1724,7 +1766,7 @@ const Dashboard = () => {
                 <Typography variant="body2" color="text.secondary">
                   Manage your account preferences and settings
                 </Typography>
-              </Box>
+        </Box>
               
               <Divider sx={{ mb: 3 }} />
               
