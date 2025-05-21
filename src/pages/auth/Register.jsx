@@ -24,6 +24,7 @@ const Register = () => {
     studentId: '',
     email: '',
     phone: '',
+    rfidCardNumber: '',
     password: '',
     confirmPassword: '',
   });
@@ -52,7 +53,7 @@ const Register = () => {
     e.preventDefault();
     
     // Basic validation
-    if (!formData.name || !formData.studentId || !formData.password || !formData.phone) {
+    if (!formData.name || !formData.studentId || !formData.password || !formData.phone || !formData.rfidCardNumber) {
       setError('Please fill in all required fields');
       return;
     }
@@ -72,6 +73,12 @@ const Register = () => {
       setError('Phone number must be 11 digits');
       return;
     }
+
+    // RFID Card Number validation (must be valid hexadecimal)
+    if (!/^0\d{9}$/.test(formData.rfidCardNumber)) {
+      setError('RFID Card Number must be a 10-digit number starting with 0');
+      return;
+    }
     
     setLoading(true);
     setError('');
@@ -81,7 +88,8 @@ const Register = () => {
         email: formData.email, 
         name: formData.name,
         studentId: formData.studentId,
-        phone: formData.phone 
+        phone: formData.phone,
+        rfidCardNumber: formData.rfidCardNumber
       });
       
       const data = await authAPI.register({
@@ -89,6 +97,7 @@ const Register = () => {
         email: formData.email,
         studentId: formData.studentId,
         phone: formData.phone,
+        rfidCardNumber: formData.rfidCardNumber,
         password: formData.password,
       });
       
@@ -264,6 +273,26 @@ const Register = () => {
             size="medium"
             value={formData.phone}
             onChange={handleChange}
+            sx={{ 
+              mt: -1,
+              '& .MuiOutlinedInput-root': {
+                borderRadius: '8px',
+              }
+            }}
+          />
+          
+          <Typography variant="subtitle1" fontWeight="medium">
+            RFID Card Number
+          </Typography>
+          <TextField
+            fullWidth
+            name="rfidCardNumber"
+            placeholder="0000012345"
+            variant="outlined"
+            size="medium"
+            value={formData.rfidCardNumber}
+            onChange={handleChange}
+            helperText="10-digit number starting with 0"
             sx={{ 
               mt: -1,
               '& .MuiOutlinedInput-root': {

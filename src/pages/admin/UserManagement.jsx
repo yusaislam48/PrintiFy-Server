@@ -39,7 +39,8 @@ import {
   AddCircle as AddCircleIcon,
   Search as SearchIcon,
   Refresh as RefreshIcon,
-  FilterList as FilterIcon
+  FilterList as FilterIcon,
+  Close as CloseIcon
 } from '@mui/icons-material';
 import { adminAPI } from '../../utils/api';
 
@@ -55,10 +56,16 @@ const UserManagement = () => {
   const [pointsDialogOpen, setPointsDialogOpen] = useState(false);
   const [pointsToAdd, setPointsToAdd] = useState(0);
   const [searchQuery, setSearchQuery] = useState('');
+  const [filterDialogOpen, setFilterDialogOpen] = useState(false);
+  const [filters, setFilters] = useState({
+    role: 'all',
+    verified: 'all'
+  });
   const [editFormData, setEditFormData] = useState({
     name: '',
     email: '',
     studentId: '',
+    rfidCardNumber: '',
     phone: '',
     role: '',
     points: 0,
@@ -87,12 +94,31 @@ const UserManagement = () => {
   // Fetch users on initial load and when page or rowsPerPage changes
   useEffect(() => {
     fetchUsers();
-  }, [page, rowsPerPage]);
+  }, [page, rowsPerPage, searchQuery, filters.role, filters.verified]);
 
   const fetchUsers = async () => {
     try {
       setLoading(true);
-      const response = await adminAPI.getAllUsers(page + 1, rowsPerPage);
+      
+      // Prepare options for API call
+      const options = {};
+      
+      // Add search parameter if there's a search query
+      if (searchQuery.trim()) {
+        options.search = searchQuery.trim();
+      }
+      
+      // Add role filter if not set to 'all'
+      if (filters.role !== 'all') {
+        options.role = filters.role;
+      }
+      
+      // Add verified filter if not set to 'all'
+      if (filters.verified !== 'all') {
+        options.verified = filters.verified === 'verified';
+      }
+      
+      const response = await adminAPI.getAllUsers(page + 1, rowsPerPage, options);
       
       setUsers(response.users);
       setTotalUsers(response.pagination.total);
@@ -103,6 +129,25 @@ const UserManagement = () => {
     } finally {
       setLoading(false);
     }
+  };
+
+  // Handle search functionality
+  const handleSearch = () => {
+    setPage(0); // Reset to first page
+    fetchUsers();
+  };
+
+  // Apply search when enter key pressed
+  const handleSearchKeyPress = (e) => {
+    if (e.key === 'Enter') {
+      handleSearch();
+    }
+  };
+
+  // Clear search and reset users
+  const handleClearSearch = () => {
+    setSearchQuery('');
+    fetchUsers();
   };
 
   const handleChangePage = (event, newPage) => {
@@ -121,6 +166,7 @@ const UserManagement = () => {
       name: user.name,
       email: user.email,
       studentId: user.studentId,
+      rfidCardNumber: user.rfidCardNumber || '',
       phone: user.phone,
       role: user.role,
       points: user.points,
@@ -132,6 +178,18 @@ const UserManagement = () => {
 
   const handleEditFormChange = (e) => {
     const { name, value } = e.target;
+    
+    // Special handling for RFID Card Number - only allow digits and max 10 characters
+    if (name === 'rfidCardNumber') {
+      // Only accept digits and limit to 10 characters
+      const newValue = value.replace(/[^\d]/g, '').slice(0, 10);
+      setEditFormData({
+        ...editFormData,
+        [name]: newValue
+      });
+      return;
+    }
+    
     setEditFormData({
       ...editFormData,
       [name]: value
@@ -146,6 +204,13 @@ const UserManagement = () => {
       if (selectedUser.role === 'master' && userRole !== 'master') {
         setError('Only master admins can edit other master admins');
         setEditDialogOpen(false);
+        setLoading(false);
+        return;
+      }
+      
+      // Validate RFID Card Number format if provided
+      if (editFormData.rfidCardNumber && !/^0\d{9}$/.test(editFormData.rfidCardNumber)) {
+        setError('RFID Card Number must be a 10-digit number starting with 0');
         setLoading(false);
         return;
       }
@@ -188,10 +253,11 @@ const UserManagement = () => {
         return;
       }
       
-      await adminAPI.deleteUser(selectedUser._id);
+      const result = await adminAPI.deleteUser(selectedUser._id);
+      console.log('Delete user result:', result);
       
       // Remove the user from the local state
-      setUsers(users.filter(user => user._id !== selectedUser._id));
+      setUsers(prevUsers => prevUsers.filter(user => user._id !== selectedUser._id));
       setTotalUsers(prevTotal => prevTotal - 1);
       
       setSuccess('User deleted successfully');
@@ -204,6 +270,7 @@ const UserManagement = () => {
       setError('Failed to delete user: ' + (err.message || 'Unknown error'));
     } finally {
       setLoading(false);
+      setDeleteDialogOpen(false);
     }
   };
 
@@ -259,6 +326,29 @@ const UserManagement = () => {
       case 'admin': return 'primary';
       default: return 'default';
     }
+  };
+
+  // Handle filter dialog open
+  const handleOpenFilterDialog = () => {
+    setFilterDialogOpen(true);
+  };
+
+  // Apply filters
+  const handleApplyFilters = () => {
+    setPage(0); // Reset to first page
+    setFilterDialogOpen(false);
+    fetchUsers();
+  };
+
+  // Reset filters
+  const handleResetFilters = () => {
+    setFilters({
+      role: 'all',
+      verified: 'all'
+    });
+    setPage(0);
+    setFilterDialogOpen(false);
+    fetchUsers();
   };
 
   if (loading && users.length === 0) {
@@ -342,13 +432,28 @@ const UserManagement = () => {
           <Grid item xs={12} sm={6}>
             <FormControl fullWidth variant="outlined" size="small">
               <OutlinedInput
-                placeholder="Search by name, email, or student ID..."
+                placeholder="Search by name, email, student ID, or RFID..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
+                onKeyPress={handleSearchKeyPress}
                 startAdornment={
                   <InputAdornment position="start">
                     <SearchIcon sx={{ color: 'text.secondary' }} />
                   </InputAdornment>
+                }
+                endAdornment={
+                  searchQuery && (
+                    <InputAdornment position="end">
+                      <IconButton
+                        onClick={handleClearSearch}
+                        edge="end"
+                        size="small"
+                        sx={{ color: 'text.secondary' }}
+                      >
+                        <CloseIcon fontSize="small" />
+                      </IconButton>
+                    </InputAdornment>
+                  )
                 }
               />
             </FormControl>
@@ -358,6 +463,7 @@ const UserManagement = () => {
               fullWidth
               variant="outlined"
               startIcon={<FilterIcon />}
+              onClick={handleOpenFilterDialog}
               sx={{ 
                 color: '#000', 
                 borderColor: '#000',
@@ -374,8 +480,8 @@ const UserManagement = () => {
             <Button
               fullWidth
               variant="outlined"
-              startIcon={<RefreshIcon />}
-              onClick={fetchUsers}
+              startIcon={<SearchIcon />}
+              onClick={handleSearch}
               sx={{ 
                 color: '#000', 
                 borderColor: '#000',
@@ -385,7 +491,7 @@ const UserManagement = () => {
                 height: '40px'
               }}
             >
-              Refresh
+              Search
             </Button>
           </Grid>
         </Grid>
@@ -410,6 +516,7 @@ const UserManagement = () => {
                 <TableCell sx={{ fontWeight: '600', color: '#000' }}>Name</TableCell>
                 <TableCell sx={{ fontWeight: '600', color: '#000' }}>Email</TableCell>
                 <TableCell sx={{ fontWeight: '600', color: '#000' }}>Student ID</TableCell>
+                <TableCell sx={{ fontWeight: '600', color: '#000' }}>RFID Card</TableCell>
                 <TableCell sx={{ fontWeight: '600', color: '#000' }}>Role</TableCell>
                 <TableCell sx={{ fontWeight: '600', color: '#000' }}>Points</TableCell>
                 <TableCell sx={{ fontWeight: '600', color: '#000' }}>Joined Date</TableCell>
@@ -427,6 +534,7 @@ const UserManagement = () => {
                     <TableCell sx={{ fontWeight: '500' }}>{user.name}</TableCell>
                     <TableCell>{user.email}</TableCell>
                     <TableCell>{user.studentId}</TableCell>
+                    <TableCell>{user.rfidCardNumber || '-'}</TableCell>
                     <TableCell>
                       <Chip
                         label={user.role.charAt(0).toUpperCase() + user.role.slice(1)}
@@ -487,7 +595,7 @@ const UserManagement = () => {
                 ))
               ) : (
                 <TableRow>
-                  <TableCell colSpan={8} align="center">
+                  <TableCell colSpan={9} align="center">
                     <Typography variant="body1" sx={{ py: 4, color: 'text.secondary' }}>
                       No users found.
                     </Typography>
@@ -561,6 +669,16 @@ const UserManagement = () => {
             value={editFormData.studentId}
             onChange={handleEditFormChange}
             sx={{ mb: 2 }}
+          />
+          <TextField
+            fullWidth
+            margin="dense"
+            label="RFID Card Number"
+            name="rfidCardNumber"
+            value={editFormData.rfidCardNumber}
+            onChange={handleEditFormChange}
+            sx={{ mb: 2 }}
+            helperText="10-digit number starting with 0 (e.g., 0000056907)"
           />
           <TextField
             fullWidth
@@ -736,6 +854,81 @@ const UserManagement = () => {
             }}
           >
             Add Points
+          </Button>
+        </DialogActions>
+      </Dialog>
+      
+      {/* Filter Dialog */}
+      <Dialog 
+        open={filterDialogOpen} 
+        onClose={() => setFilterDialogOpen(false)}
+        maxWidth="xs"
+        fullWidth
+        PaperProps={{
+          sx: {
+            borderRadius: 2,
+            boxShadow: '0 8px 24px rgba(0,0,0,0.15)'
+          }
+        }}
+      >
+        <DialogTitle sx={{ fontWeight: '500', pb: 1 }}>
+          Filter Users
+        </DialogTitle>
+        <DialogContent dividers>
+          <FormControl fullWidth margin="dense" sx={{ mb: 2 }}>
+            <InputLabel>User Role</InputLabel>
+            <Select
+              value={filters.role}
+              onChange={(e) => setFilters({...filters, role: e.target.value})}
+              label="User Role"
+            >
+              <MenuItem value="all">All Roles</MenuItem>
+              <MenuItem value="user">User</MenuItem>
+              <MenuItem value="admin">Admin</MenuItem>
+              {userRole === 'master' && (
+                <MenuItem value="master">Master Admin</MenuItem>
+              )}
+            </Select>
+          </FormControl>
+          
+          <FormControl fullWidth margin="dense">
+            <InputLabel>Verification Status</InputLabel>
+            <Select
+              value={filters.verified}
+              onChange={(e) => setFilters({...filters, verified: e.target.value})}
+              label="Verification Status"
+            >
+              <MenuItem value="all">All Status</MenuItem>
+              <MenuItem value="verified">Verified</MenuItem>
+              <MenuItem value="unverified">Unverified</MenuItem>
+            </Select>
+          </FormControl>
+        </DialogContent>
+        <DialogActions sx={{ px: 3, py: 2 }}>
+          <Button 
+            onClick={handleResetFilters}
+            sx={{ color: 'text.secondary', fontWeight: '500' }}
+          >
+            Reset
+          </Button>
+          <Button 
+            onClick={() => setFilterDialogOpen(false)}
+            sx={{ color: 'text.secondary', fontWeight: '500' }}
+          >
+            Cancel
+          </Button>
+          <Button 
+            onClick={handleApplyFilters} 
+            variant="contained" 
+            sx={{ 
+              bgcolor: '#000', 
+              '&:hover': { bgcolor: '#333' }, 
+              fontWeight: '500',
+              textTransform: 'none',
+              borderRadius: 1
+            }}
+          >
+            Apply Filters
           </Button>
         </DialogActions>
       </Dialog>

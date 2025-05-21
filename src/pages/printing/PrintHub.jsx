@@ -23,7 +23,11 @@ import {
   DialogContentText,
   useMediaQuery,
   useTheme,
-  Tooltip
+  Tooltip,
+  RadioGroup,
+  FormControlLabel,
+  Radio,
+  FormControl
 } from '@mui/material';
 import { 
   Search as SearchIcon, 
@@ -46,7 +50,7 @@ const formatDate = (dateString) => {
 };
 
 const PrintHub = () => {
-  const [studentId, setStudentId] = useState('');
+  const [searchValue, setSearchValue] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [searchPerformed, setSearchPerformed] = useState(false);
@@ -62,26 +66,42 @@ const PrintHub = () => {
   const [confirmDialogOpen, setConfirmDialogOpen] = useState(false);
   const [jobToComplete, setJobToComplete] = useState(null);
 
-  // Auto-search when studentId reaches 7 digits
+  // Auto-search when input is valid
   useEffect(() => {
-    if (studentId.length === 7) {
+    // Auto-search when input is a valid 7-digit student ID not starting with 0
+    if (/^[1-9]\d{6}$/.test(searchValue)) {
       searchPrintJobs();
     }
-  }, [studentId]);
+    // Auto-search when input is a valid RFID (10 digits starting with 0)
+    else if (/^0\d{9}$/.test(searchValue)) {
+      searchPrintJobs();
+    }
+  }, [searchValue]);
 
-  // Handle student ID input
-  const handleStudentIdChange = (e) => {
+  // Handle search input change
+  const handleSearchValueChange = (e) => {
     const input = e.target.value;
-    if (/^\d{0,7}$/.test(input)) {
-      setStudentId(input);
+    
+    // Allow only digits for both types of IDs
+    if (/^\d*$/.test(input)) {
+      setSearchValue(input);
       setError('');
     }
   };
 
-  // Search for print jobs by student ID
+  // Search for print jobs
   const searchPrintJobs = async () => {
-    if (!studentId || studentId.length !== 7) {
-      setError('Please enter a valid 7-digit student ID');
+    if (!searchValue) {
+      setError("Please enter a Student ID or RFID Card Number");
+      return;
+    }
+
+    // Validate input format
+    const isStudentId = /^[1-9]\d{6}$/.test(searchValue);
+    const isRfidCard = /^0\d{9}$/.test(searchValue);
+
+    if (!isStudentId && !isRfidCard) {
+      setError("Invalid format. Student ID should be 7 digits not starting with 0. RFID card should be 10 digits starting with 0.");
       return;
     }
 
@@ -91,19 +111,14 @@ const PrintHub = () => {
     setSuccessMessage('');
     
     try {
-      const data = await printHubAPI.findPrintJobsByStudentId(studentId);
+      const data = await printHubAPI.findPrintJobsByStudentId(searchValue);
       
       // Log job details for debugging
       if (data.pendingPrintJobs && data.pendingPrintJobs.length > 0) {
-        console.log(`Found ${data.pendingPrintJobs.length} jobs for student ${studentId}`);
+        console.log(`Found ${data.pendingPrintJobs.length} jobs for ${isRfidCard ? 'RFID' : 'Student ID'}: ${searchValue}`);
         console.log('Job IDs:', data.pendingPrintJobs.map(job => job._id));
-        console.log('First job details:', JSON.stringify({
-          id: data.pendingPrintJobs[0]._id,
-          filename: data.pendingPrintJobs[0].fileName,
-          hasCloudinaryId: !!data.pendingPrintJobs[0].cloudinaryPublicId
-        }));
       } else {
-        console.log('No pending jobs found for student ID:', studentId);
+        console.log(`No pending jobs found for ${isRfidCard ? 'RFID' : 'Student ID'}: ${searchValue}`);
       }
       
       setPrintJobs(data.pendingPrintJobs || []);
@@ -115,7 +130,7 @@ const PrintHub = () => {
       // More detailed error message
       const errorMessage = err.response?.data?.message || 
                           err.message || 
-                          'Failed to find print jobs for this student ID';
+                          'Failed to find print jobs';
       setError(errorMessage);
       setPrintJobs([]);
       setSearchPerformed(true);
@@ -126,7 +141,7 @@ const PrintHub = () => {
 
   // Handle key press (Enter)
   const handleKeyPress = (e) => {
-    if (e.key === 'Enter' && studentId.length === 7) {
+    if (e.key === 'Enter') {
       searchPrintJobs();
     }
   };
@@ -291,25 +306,25 @@ const PrintHub = () => {
           PrintiFy Print Hub
         </Typography>
         <Typography variant="body1" color="text.secondary" sx={{ mb: 3 }}>
-          Search for pending print jobs by entering a student ID
+          Search for pending print jobs by entering a Student ID or RFID Card Number
         </Typography>
 
         <Box sx={{ mb: 3 }}>
           <TextField
             fullWidth
-            label="Student ID"
+            label="Search"
             variant="outlined"
-            value={studentId}
-            onChange={handleStudentIdChange}
+            value={searchValue}
+            onChange={handleSearchValueChange}
             onKeyPress={handleKeyPress}
-            placeholder="Enter 7-digit student ID"
+            placeholder="Enter Student ID (7 digits) or RFID Card Number (10 digits)"
             disabled={loading}
             InputProps={{
               endAdornment: (
                 <InputAdornment position="end">
                   <IconButton
                     onClick={searchPrintJobs}
-                    disabled={loading || studentId.length !== 7}
+                    disabled={loading || (!(/^[1-9]\d{6}$/.test(searchValue) || /^0\d{9}$/.test(searchValue)))}
                   >
                     <SearchIcon />
                   </IconButton>
@@ -322,7 +337,7 @@ const PrintHub = () => {
           <Button
             variant="contained"
             onClick={searchPrintJobs}
-            disabled={loading || studentId.length !== 7}
+            disabled={loading || (!(/^[1-9]\d{6}$/.test(searchValue) || /^0\d{9}$/.test(searchValue)))}
             startIcon={loading ? <CircularProgress size={20} color="inherit" /> : <SearchIcon />}
             sx={{ mt: 1 }}
           >
@@ -505,9 +520,9 @@ const PrintHub = () => {
                 </Grid>
               </>
             ) : (
-              <Alert severity="info">
-                No pending print jobs found for student ID: {studentId}
-              </Alert>
+              <Typography variant="body1" align="center" color="text.secondary">
+                No pending print jobs found for {/^0\d{9}$/.test(searchValue) ? `RFID Card: ${searchValue}` : `Student ID: ${searchValue}`}
+              </Typography>
             )}
           </Box>
         )}

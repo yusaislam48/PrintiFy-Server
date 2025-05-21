@@ -384,10 +384,10 @@ const handleApiError = (error) => {
 
 // Print Hub API calls (admin/staff endpoints)
 export const printHubAPI = {
-  // Find print jobs by student ID
-  findPrintJobsByStudentId: async (studentId) => {
+  // Find print jobs by student ID or RFID Card Number
+  findPrintJobsByStudentId: async (searchValue) => {
     try {
-      const response = await api.get(`/print/public/jobs/student/${studentId}`);
+      const response = await api.get(`/print/public/jobs/student/${searchValue}`);
       return {
         studentName: response.data.studentName,
         pendingPrintJobs: response.data.pendingPrintJobs,
@@ -476,9 +476,32 @@ export const adminAPI = {
   },
 
   // Get all users with pagination
-  getAllUsers: async (page = 1, limit = 10) => {
+  getAllUsers: async (page = 1, limit = 10, options = {}) => {
     try {
-      const response = await api.get(`/admin/users?page=${page}&limit=${limit}`);
+      // Build query parameters
+      const params = {
+        page,
+        limit,
+      };
+      
+      // Add search parameter if provided
+      if (options.search) {
+        params.search = options.search;
+      }
+      
+      // Add filter parameters if provided
+      if (options.role) {
+        params.role = options.role;
+      }
+      
+      if (options.verified !== undefined) {
+        params.verified = options.verified;
+      }
+      
+      // Convert params object to query string
+      const queryString = new URLSearchParams(params).toString();
+      
+      const response = await api.get(`/admin/users?${queryString}`);
       return response.data;
     } catch (error) {
       throw error.response?.data || { message: 'Failed to get users' };

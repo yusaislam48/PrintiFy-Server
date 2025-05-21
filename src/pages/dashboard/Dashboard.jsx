@@ -1254,6 +1254,15 @@ const Dashboard = () => {
                       
                       <Box sx={{ display: 'flex', mb: 2 }}>
                         <Typography variant="body2" color="text.secondary" sx={{ width: 120 }}>
+                          RFID Card:
+                        </Typography>
+                        <Typography variant="body2" fontWeight="medium">
+                          {user?.rfidCardNumber || 'Not set'}
+                        </Typography>
+                      </Box>
+                      
+                      <Box sx={{ display: 'flex', mb: 2 }}>
+                        <Typography variant="body2" color="text.secondary" sx={{ width: 120 }}>
                           Phone:
                         </Typography>
                         <Typography variant="body2" fontWeight="medium">
