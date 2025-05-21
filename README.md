@@ -1,13 +1,76 @@
-# React + Vite
+# PrintiFy
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+PrintiFy is a web-based printing service that allows users to upload, manage, and print PDF documents. It includes features for user authentication, print job management, and administrative controls.
 
-Currently, two official plugins are available:
+## Project Structure
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Babel](https://babeljs.io/) for Fast Refresh
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/) for Fast Refresh
+The project is organized into two main directories:
 
-## Expanding the ESLint configuration
+- `client`: Contains the React frontend built with Vite
+- `server`: Contains the Node.js/Express backend
 
-If you are developing a production application, we recommend using TypeScript with type-aware lint rules enabled. Check out the [TS template](https://github.com/vitejs/vite/tree/main/packages/create-vite/template-react-ts) for information on how to integrate TypeScript and [`typescript-eslint`](https://typescript-eslint.io) in your project.
-# PrintiFy-Client
+## Getting Started
+
+### Prerequisites
+
+- Node.js (v18 or higher)
+- MongoDB
+- npm or yarn
+
+### Installation
+
+1. Clone the repository
+   ```bash
+   git clone https://github.com/yusaislam48/PrintiFy.git
+   cd PrintiFy
+   ```
+
+2. Install dependencies for both client and server
+   ```bash
+   npm run install-all
+   ```
+
+3. Set up environment variables
+   - Create a `.env` file in the server directory based on the example provided
+
+### Running the Application
+
+To run both client and server concurrently:
+```bash
+npm run dev
+```
+
+To run only the client:
+```bash
+npm run client
+```
+
+To run only the server:
+```bash
+npm run server
+```
+
+## Features
+
+- User authentication and authorization
+- PDF document upload and management
+- Print job tracking
+- Direct printing to local printers
+- Administrative dashboard
+- User points system for print credits
+
+## Technologies Used
+
+### Frontend
+- React
+- Material UI
+- PDF.js for PDF rendering
+- Axios for API requests
+
+### Backend
+- Node.js
+- Express
+- MongoDB with Mongoose
+- JWT for authentication
+- Cloudinary for file storage
+- PDF-to-printer for direct printing
