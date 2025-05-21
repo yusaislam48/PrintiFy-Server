@@ -47,9 +47,16 @@ app.use(cors({
 
 // Add CORS headers to all responses
 app.use((req, res, next) => {
-  res.header('Access-Control-Allow-Origin', '*');
+  const origin = req.headers.origin;
+  // Instead of wildcard '*', use the actual origin if it's allowed
+  if (origin && allowedOrigins.includes(origin)) {
+    res.header('Access-Control-Allow-Origin', origin);
+  } else {
+    res.header('Access-Control-Allow-Origin', 'https://printi-fy-client.vercel.app');
+  }
   res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
   res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+  res.header('Access-Control-Allow-Credentials', 'true');
   next();
 });
 
@@ -130,8 +137,13 @@ app.get('/pdf-proxy/:cloud_name/raw/upload/:file_path', async (req, res) => {
         res.setHeader('Content-Disposition', 'inline');
       }
       
-      // Add CORS headers to avoid browser restrictions - allow all origins
-      res.setHeader('Access-Control-Allow-Origin', '*');
+      // Add CORS headers to avoid browser restrictions
+      const origin = req.headers.origin;
+      if (origin && allowedOrigins.includes(origin)) {
+        res.setHeader('Access-Control-Allow-Origin', origin);
+      } else {
+        res.setHeader('Access-Control-Allow-Origin', 'https://printi-fy-client.vercel.app');
+      }
       res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
       res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
       res.setHeader('Access-Control-Allow-Credentials', 'true');
