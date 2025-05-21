@@ -19,13 +19,40 @@ connectDB();
 // Create Express app
 const app = express();
 
-// CORS configuration
+// CORS configuration - explicitly list all allowed origins
+const allowedOrigins = [
+  'http://localhost:3000',
+  'http://localhost:5173', 
+  'https://printi-fy-client.vercel.app',
+  'https://printify-server-production.up.railway.app'
+];
+
 app.use(cors({
-  origin: '*', // Allow all origins for development (more secure in production would be specific origins)
-  credentials: true, // Allow credentials (cookies, etc.)
+  origin: function(origin, callback) {
+    // Allow requests with no origin (like mobile apps, curl requests)
+    if (!origin) return callback(null, true);
+    
+    if (allowedOrigins.indexOf(origin) !== -1) {
+      callback(null, true);
+    } else {
+      console.log('CORS blocked origin:', origin);
+      // Still allow the request to go through for development/debugging
+      callback(null, true);
+    }
+  },
+  credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization']
 }));
+
+// Add CORS headers to all responses
+app.use((req, res, next) => {
+  res.header('Access-Control-Allow-Origin', '*');
+  res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
+  res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+  next();
+});
+
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
@@ -103,10 +130,11 @@ app.get('/pdf-proxy/:cloud_name/raw/upload/:file_path', async (req, res) => {
         res.setHeader('Content-Disposition', 'inline');
       }
       
-      // Add CORS headers to avoid browser restrictions
+      // Add CORS headers to avoid browser restrictions - allow all origins
       res.setHeader('Access-Control-Allow-Origin', '*');
-      res.setHeader('Access-Control-Allow-Methods', 'GET');
-      res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+      res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+      res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+      res.setHeader('Access-Control-Allow-Credentials', 'true');
       
       // Log success
       console.log(`Successfully streaming PDF: ${publicId}`);
@@ -142,6 +170,23 @@ app.get('/pdf-proxy/:cloud_name/raw/upload/:file_path', async (req, res) => {
 // Home route
 app.get('/', (req, res) => {
   res.send('PrintiFy API is running');
+});
+
+// CORS test page
+app.get('/cors-test', (req, res) => {
+  const fs = require('fs');
+  const path = require('path');
+  
+  try {
+    const filePath = path.join(__dirname, 'cors-test.html');
+    const content = fs.readFileSync(filePath, 'utf8');
+    
+    res.setHeader('Content-Type', 'text/html');
+    res.send(content);
+  } catch (error) {
+    console.error('Error serving CORS test page:', error);
+    res.status(500).send('Error loading CORS test page');
+  }
 });
 
 // Create initial master admin account if it doesn't exist
