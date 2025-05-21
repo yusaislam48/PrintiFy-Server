@@ -1,19 +1,21 @@
 {
   "name": "printify",
   "version": "1.0.0",
-  "description": "PrintiFy - Web-based printing service",
-  "main": "server/server.js",
+  "description": "PrintiFy - Web-based printing service (Full Stack)",
   "scripts": {
-    "start": "node server/server.js",
-    "server": "cd server && npm start",
     "client": "cd client && npm run dev",
+    "server": "cd server && npm start",
     "dev": "concurrently \"npm run server\" \"npm run client\"",
-    "install-all": "npm install && cd client && npm install --legacy-peer-deps && cd ../server && npm install"
+    "client:build": "cd client && npm run build",
+    "install:all": "npm install && cd client && npm install --legacy-peer-deps && cd ../server && npm install",
+    "client:push": "git subtree push --prefix client origin-client main",
+    "server:push": "git subtree push --prefix server origin-server main"
   },
   "keywords": [
     "printing",
     "pdf",
-    "education"
+    "education",
+    "fullstack"
   ],
   "author": "",
   "license": "ISC",
