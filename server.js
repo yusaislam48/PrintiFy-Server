@@ -21,7 +21,7 @@ const app = express();
 
 // CORS configuration
 app.use(cors({
-  origin: ['http://localhost:3000', 'http://localhost:5173'], // Allow frontend origins
+  origin: ['http://localhost:3000', 'http://localhost:5173','https://printi-fy-client.vercel.app'], // Allow frontend origins
   credentials: true, // Allow credentials (cookies, etc.)
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization']
