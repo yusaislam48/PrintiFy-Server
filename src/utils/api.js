@@ -412,6 +412,20 @@ export const printHubAPI = {
     }
   },
   
+  // Print a job directly on the default printer
+  printNow: async (jobId) => {
+    try {
+      const response = await api.post(`/print/public/jobs/${jobId}/print-now`);
+      return {
+        message: response.data.message,
+        printJob: response.data.printJob,
+        user: response.data.user // Will include updated user points
+      };
+    } catch (error) {
+      throw error;
+    }
+  },
+  
   // Get direct PDF view URL
   getDirectPdfUrl: (jobId) => {
     if (!jobId) {

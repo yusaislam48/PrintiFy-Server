@@ -39,7 +39,8 @@ import {
   FileDownload as FileDownloadIcon,
   Warning as WarningIcon,
   Info as InfoIcon,
-  DeleteForever as DeleteForeverIcon
+  DeleteForever as DeleteForeverIcon,
+  LocalPrintshop as LocalPrintshopIcon
 } from '@mui/icons-material';
 import { printHubAPI } from '../../utils/api';
 
@@ -65,6 +66,9 @@ const PrintHub = () => {
   const [errorMessage, setErrorMessage] = useState('');
   const [confirmDialogOpen, setConfirmDialogOpen] = useState(false);
   const [jobToComplete, setJobToComplete] = useState(null);
+  const [printingDialogOpen, setPrintingDialogOpen] = useState(false);
+  const [printingStatus, setPrintingStatus] = useState('preparing'); // 'preparing', 'printing', 'success', 'error'
+  const [jobToPrint, setJobToPrint] = useState(null);
 
   // Auto-search when input is valid
   useEffect(() => {
@@ -206,6 +210,90 @@ const PrintHub = () => {
     } finally {
       setConfirmDialogOpen(false);
       setJobToComplete(null);
+    }
+  };
+
+  // Open printing dialog and start print process
+  const startPrinting = async (job) => {
+    // Show the printing dialog
+    setJobToPrint(job);
+    setPrintingStatus('preparing');
+    setPrintingDialogOpen(true);
+    
+    try {
+      // Check if user has enough points
+      const pointsNeeded = job?.pointsUsed || job?.printSettings?.totalPages || 0;
+      if (userPoints < pointsNeeded) {
+        setPrintingStatus('error');
+        setErrorMessage(`Cannot print job. Student needs ${pointsNeeded} points but only has ${userPoints} points available.`);
+        return;
+      }
+      
+      // Start the printing process
+      setPrintingStatus('printing');
+      
+      // Call the printNow API function
+      const response = await printHubAPI.printNow(job._id);
+      
+      // Update the UI to show it's printed
+      setPrintJobs(prevJobs => 
+        prevJobs.map(j => 
+          j._id === job._id ? { ...j, status: 'completed' } : j
+        )
+      );
+      
+      // Update user points
+      if (response.user && response.user.points !== undefined) {
+        setUserPoints(response.user.points);
+      }
+      
+      // Set status to success
+      setPrintingStatus('success');
+      
+      // Show success message
+      setSuccessMessage(`Print job sent to printer. ${response.printJob.pointsUsed} points deducted.`);
+      
+      // Automatically close dialog after success
+      setTimeout(() => {
+        setPrintingDialogOpen(false);
+        setJobToPrint(null);
+      }, 3000);
+      
+    } catch (err) {
+      console.error('Error printing job:', err);
+      setPrintingStatus('error');
+      
+      // Handle specific error for not enough points
+      if (err.response?.data?.message === 'User does not have enough points') {
+        const required = err.response.data.required || 0;
+        const available = err.response.data.available || 0;
+        setErrorMessage(`Cannot print job. Student needs ${required} points but only has ${available} points available.`);
+      } 
+      // Handle file not found error
+      else if (err.response?.status === 404) {
+        setErrorMessage(err.response.data?.message || 'PDF file not found. It may have been deleted or expired.');
+      }
+      else {
+        // General error
+        const errorMessage = err.response?.data?.message || 
+                            err.message || 
+                            'Failed to print job';
+        setErrorMessage(errorMessage);
+      }
+    }
+  };
+
+  // Close printing dialog
+  const handlePrintingDialogClose = () => {
+    // Only allow closing if not in the middle of printing
+    if (printingStatus !== 'printing') {
+      setPrintingDialogOpen(false);
+      setJobToPrint(null);
+      
+      // If there was an error, clear it when dialog closes
+      if (printingStatus === 'error') {
+        setErrorMessage('');
+      }
     }
   };
 
@@ -476,21 +564,40 @@ const PrintHub = () => {
                         </CardContent>
                         
                         <CardActions sx={{ px: 2, pb: 2 }}>
-                          {job.status === 'pending' ? (
-                            <Tooltip title={!hasEnoughPoints ? `Student needs ${pointsNeeded} points but only has ${userPoints}` : "Mark as printed (file will be deleted)"}>
-                              <span> {/* Wrapper needed for disabled buttons with Tooltip */}
-                                <Button 
-                                  variant="contained" 
-                                  color="success"
-                                  startIcon={<CheckCircleIcon />}
-                                  onClick={() => confirmMarkAsPrinted(job)}
-                                  disabled={!hasEnoughPoints}
-                                >
-                                  Mark as Printed
-                                </Button>
-                              </span>
-                            </Tooltip>
-                          ) : (
+                          {job.status === 'pending' && (
+                            <>
+                              <Tooltip title={!hasEnoughPoints ? `Student needs ${pointsNeeded} points but only has ${userPoints}` : "Print job now on default printer"}>
+                                <span> {/* Wrapper needed for disabled buttons with Tooltip */}
+                                  <Button 
+                                    variant="contained" 
+                                    color="primary"
+                                    startIcon={<LocalPrintshopIcon />}
+                                    onClick={() => startPrinting(job)}
+                                    disabled={!hasEnoughPoints}
+                                    sx={{ mr: 2 }}
+                                  >
+                                    Print Now
+                                  </Button>
+                                </span>
+                              </Tooltip>
+                              
+                              <Tooltip title={!hasEnoughPoints ? `Student needs ${pointsNeeded} points but only has ${userPoints}` : "Mark as printed (file will be deleted)"}>
+                                <span> {/* Wrapper needed for disabled buttons with Tooltip */}
+                                  <Button 
+                                    variant="contained" 
+                                    color="success"
+                                    startIcon={<CheckCircleIcon />}
+                                    onClick={() => confirmMarkAsPrinted(job)}
+                                    disabled={!hasEnoughPoints}
+                                  >
+                                    Mark as Printed
+                                  </Button>
+                                </span>
+                              </Tooltip>
+                            </>
+                          )}
+                          
+                          {job.status !== 'pending' && (
                             <Chip 
                               icon={<PrintIcon />} 
                               label="Printed" 
@@ -503,7 +610,7 @@ const PrintHub = () => {
                             variant="outlined" 
                             startIcon={<PrintIcon />}
                             onClick={() => handlePreview(job)}
-                            sx={{ ml: 2 }}
+                            sx={{ ml: job.status === 'pending' ? 2 : 0 }}
                           >
                             View PDF
                           </Button>
@@ -704,6 +811,87 @@ const PrintHub = () => {
             autoFocus
           >
             Complete & Delete
+          </Button>
+        </DialogActions>
+      </Dialog>
+      
+      {/* Printing Dialog */}
+      <Dialog
+        open={printingDialogOpen}
+        onClose={handlePrintingDialogClose}
+        aria-labelledby="printing-dialog-title"
+        aria-describedby="printing-dialog-description"
+        maxWidth="sm"
+        fullWidth
+      >
+        <DialogTitle id="printing-dialog-title" sx={{ textAlign: 'center' }}>
+          {printingStatus === 'preparing' && "Preparing to Print"}
+          {printingStatus === 'printing' && "Printing in Progress"}
+          {printingStatus === 'success' && "Print Job Completed"}
+          {printingStatus === 'error' && "Print Error"}
+        </DialogTitle>
+        <DialogContent sx={{ 
+          display: 'flex', 
+          flexDirection: 'column', 
+          alignItems: 'center', 
+          justifyContent: 'center',
+          p: 4
+        }}>
+          {(printingStatus === 'preparing' || printingStatus === 'printing') && (
+            <CircularProgress size={60} sx={{ mb: 3 }} />
+          )}
+          
+          {printingStatus === 'success' && (
+            <CheckCircleIcon color="success" sx={{ fontSize: 60, mb: 3 }} />
+          )}
+          
+          {printingStatus === 'error' && (
+            <WarningIcon color="error" sx={{ fontSize: 60, mb: 3 }} />
+          )}
+          
+          <Typography variant="h6" gutterBottom align="center">
+            {jobToPrint?.fileName}
+          </Typography>
+          
+          <DialogContentText id="printing-dialog-description" sx={{ textAlign: 'center', mt: 1 }}>
+            {printingStatus === 'preparing' && "Preparing your document for printing..."}
+            {printingStatus === 'printing' && (
+              <>
+                <p>Sending the document to your default printer...</p>
+                <p>Please wait while the document is being processed.</p>
+              </>
+            )}
+            {printingStatus === 'success' && (
+              <>
+                <p>Your document has been successfully sent to the printer!</p>
+                <p>Check your printer for the printed document.</p>
+              </>
+            )}
+            {printingStatus === 'error' && "There was an error printing your document."}
+          </DialogContentText>
+          
+          {printingStatus === 'success' && (
+            <Box sx={{ mt: 2, textAlign: 'center' }}>
+              <Typography variant="body2" color="text.secondary">
+                {jobToPrint?.pointsUsed || jobToPrint?.printSettings?.totalPages || 0} points have been deducted from the student's account.
+              </Typography>
+            </Box>
+          )}
+          
+          {printingStatus === 'error' && errorMessage && (
+            <Alert severity="error" sx={{ mt: 2, width: '100%' }}>
+              {errorMessage}
+            </Alert>
+          )}
+        </DialogContent>
+        <DialogActions>
+          <Button 
+            onClick={handlePrintingDialogClose} 
+            disabled={printingStatus === 'printing'}
+            variant="outlined"
+          >
+            {printingStatus === 'success' ? 'Close' : 
+             printingStatus === 'error' ? 'Close' : 'Cancel'}
           </Button>
         </DialogActions>
       </Dialog>
