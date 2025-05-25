@@ -20,10 +20,6 @@ connectDB();
 // Create Express app
 const app = express();
 
-// Debug log for booth manager routes
-console.log('🔍 Booth Manager Routes loaded:', typeof boothManagerRoutes);
-console.log('🔍 Booth Manager Routes keys:', Object.keys(boothManagerRoutes));
-
 // CORS configuration - explicitly list all allowed origins
 const allowedOrigins = [
   'http://localhost:3000',
@@ -79,9 +75,7 @@ app.use('/api/auth', authRoutes);
 app.use('/api/users', userRoutes);
 app.use('/api/print', printRoutes);
 app.use('/api/admin', adminRoutes);
-console.log('🚀 Mounting booth manager routes at /api/booth-managers');
 app.use('/api/booth-managers', boothManagerRoutes);
-console.log('✅ Booth manager routes mounted successfully');
 
 // PDF Proxy route - handles /pdf-proxy/* requests
 app.get('/pdf-proxy/:cloud_name/raw/upload/:file_path', async (req, res) => {
