@@ -2,13 +2,16 @@ const express = require('express');
 const router = express.Router();
 const printController = require('../controllers/printController');
 const { handleUploadErrors } = require('../middleware/upload');
-const { protect } = require('../middleware/authMiddleware');
+const { protect, boothManager } = require('../middleware/authMiddleware');
 
 // Public routes - no authentication required
 router.get('/public/jobs/student/:studentId', printController.findPrintJobsByStudentId);
 router.post('/public/jobs/:jobId/complete', printController.markPrintJobAsCompleted);
 router.get('/public/view/:jobId', printController.viewPublicPDF);
 router.post('/public/jobs/:jobId/print-now', printController.printJobNow);
+
+// Booth manager routes - require booth manager authentication
+router.post('/booth/jobs/:jobId/print-now', protect, boothManager, printController.printJobNowWithBooth);
 
 // All routes below this line require authentication
 router.use(protect);

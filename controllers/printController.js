@@ -543,7 +543,347 @@ exports.viewPublicPDF = async (req, res) => {
   }
 };
 
-// Print a job directly and mark it as completed
+// Print a job directly with booth tracking and paper deduction
+exports.printJobNowWithBooth = async (req, res) => {
+  try {
+    const { jobId } = req.params;
+    const boothManagerId = req.user.id; // Get booth manager ID from authenticated user
+    
+    const User = require('../models/User');
+    const BoothManager = require('../models/BoothManager');
+    
+    // Find the print job
+    const printJob = await PrintJob.findById(jobId);
+    
+    if (!printJob) {
+      return res.status(404).json({ message: 'Print job not found' });
+    }
+    
+    // Can only print jobs that are pending or processing
+    if (printJob.status !== 'pending' && printJob.status !== 'processing') {
+      return res.status(400).json({ 
+        message: `Cannot print a job with status: ${printJob.status}` 
+      });
+    }
+    
+    // Find the user who owns this print job
+    const user = await User.findById(printJob.userId);
+    
+    if (!user) {
+      return res.status(404).json({ message: 'User not found' });
+    }
+    
+    // Find the booth manager
+    const boothManager = await BoothManager.findById(boothManagerId);
+    
+    if (!boothManager) {
+      return res.status(404).json({ message: 'Booth manager not found' });
+    }
+    
+    // Calculate points and paper to deduct
+    const pointsToDeduct = printJob.pointsUsed || printJob.printSettings.totalPages || 1;
+    const paperToDeduct = pointsToDeduct; // 1 point = 1 sheet of paper
+    
+    // Check if user has enough points
+    if (user.points < pointsToDeduct) {
+      return res.status(400).json({
+        message: 'User does not have enough points',
+        required: pointsToDeduct,
+        available: user.points
+      });
+    }
+    
+    // Check if booth has enough paper
+    if (boothManager.loadedPaper < paperToDeduct) {
+      return res.status(400).json({
+        message: 'Booth does not have enough paper',
+        required: paperToDeduct,
+        available: boothManager.loadedPaper
+      });
+    }
+    
+    // Get the cloudinary public ID and fetch the PDF for printing
+    const publicId = printJob.cloudinaryPublicId;
+    
+    if (!publicId) {
+      return res.status(404).json({ message: 'PDF file reference not found' });
+    }
+    
+    // Create a download URL to get the PDF
+    const downloadOptions = {
+      resource_type: 'raw',
+      type: 'upload',
+      format: 'pdf',
+      secure: true,
+      sign_url: true
+    };
+    
+    // Make sure we don't have double extensions in the URL
+    let formattedPublicId = publicId;
+    if (formattedPublicId.endsWith('.pdf')) {
+      downloadOptions.format = null;
+    }
+    
+    console.log(`Using Cloudinary public ID for printing: ${formattedPublicId}`);
+    const downloadUrl = cloudinary.url(formattedPublicId, downloadOptions);
+    console.log(`Generated download URL: ${downloadUrl}`);
+    
+    try {
+      // Fetch the PDF file from Cloudinary
+      const pdfResponse = await axios({
+        url: downloadUrl,
+        method: 'GET',
+        responseType: 'arraybuffer',
+        timeout: 15000
+      });
+      
+      // Create a temporary file path for the PDF
+      const tempFilePath = path.join(os.tmpdir(), `printjob_${jobId}_${Date.now()}.pdf`);
+      
+      // Write the PDF data to a temporary file
+      fs.writeFileSync(tempFilePath, Buffer.from(pdfResponse.data));
+      console.log(`PDF saved to temporary file: ${tempFilePath}`);
+      
+      // Get print settings from the job
+      const printOptions = {};
+      
+      // Apply print settings if available
+      if (printJob.printSettings) {
+        if (printJob.printSettings.copies > 1) {
+          printOptions.copies = printJob.printSettings.copies;
+        }
+        
+        if (printJob.printSettings.colorMode === 'bw') {
+          printOptions.monochrome = true;
+        }
+        
+        if (printJob.printSettings.printBothSides) {
+          printOptions.duplex = true;
+        }
+        
+        if (printJob.printSettings.pageRange !== 'all' && printJob.printSettings.customPageRange) {
+          printOptions.pages = printJob.printSettings.customPageRange;
+        }
+        
+        if (printJob.printSettings.layout === 'landscape') {
+          printOptions.landscape = true;
+        }
+      }
+      
+      console.log('Printing with options:', printOptions);
+      
+      try {
+        // Detect the operating system and print
+        const platform = os.platform();
+        console.log(`Detected platform: ${platform}`);
+        
+        if (platform === 'darwin') {
+          // macOS specific printing using lp command
+          let printSuccess = false;
+          
+          console.log('Trying lp command for printing...');
+          
+          try {
+            let lpCommand = `lp "${tempFilePath}"`;
+            
+            if (printOptions.copies) {
+              lpCommand += ` -n ${printOptions.copies}`;
+            }
+            
+            if (printOptions.landscape) {
+              lpCommand += ` -o landscape`;
+            }
+            
+            if (printOptions.duplex) {
+              lpCommand += ` -o sides=two-sided-long-edge`;
+            }
+            
+            if (printOptions.pages) {
+              lpCommand += ` -o page-ranges=${printOptions.pages}`;
+            }
+            
+            if (printOptions.monochrome) {
+              lpCommand += ` -o ColorModel=Gray`;
+            }
+            
+            console.log(`Executing lp command: ${lpCommand}`);
+            
+            const lpResult = await new Promise((resolve) => {
+              exec(lpCommand, (error, stdout, stderr) => {
+                if (error) {
+                  console.error(`lp command error: ${error.message}`);
+                  resolve(false);
+                } else {
+                  if (stderr) console.error(`lp command stderr: ${stderr}`);
+                  console.log(`lp command stdout: ${stdout}`);
+                  resolve(true);
+                }
+              });
+            });
+            
+            printSuccess = lpResult;
+            if (printSuccess) {
+              console.log('Print job sent to printer via lp command successfully');
+            }
+          } catch (lpError) {
+            console.error('Error with lp command:', lpError);
+          }
+          
+          // Fallback to opening in Preview if lp fails
+          if (!printSuccess) {
+            console.log('Trying open command with Preview...');
+            try {
+              const openCommand = `open -a "Preview" "${tempFilePath}"`;
+              
+              await new Promise((resolve) => {
+                exec(openCommand, (error, stdout, stderr) => {
+                  if (error) {
+                    console.error(`open command error: ${error.message}`);
+                  } else {
+                    if (stderr) console.error(`open command stderr: ${stderr}`);
+                    console.log(`open command stdout: ${stdout}`);
+                    console.log('PDF opened in Preview for manual printing');
+                    printSuccess = true;
+                  }
+                  resolve();
+                });
+              });
+            } catch (openError) {
+              console.error('Error with open command:', openError);
+            }
+          }
+          
+          await new Promise(resolve => setTimeout(resolve, 3000));
+        } else {
+          // Use pdf-to-printer for Windows and other platforms
+          const pdfToPrinterOptions = {};
+          
+          if (printOptions.copies && printOptions.copies > 1) {
+            pdfToPrinterOptions.copies = printOptions.copies;
+          }
+          
+          if (printOptions.monochrome) {
+            pdfToPrinterOptions.monochrome = true;
+          } else {
+            pdfToPrinterOptions.color = true;
+          }
+          
+          if (printOptions.landscape) {
+            pdfToPrinterOptions.landscape = true;
+          } else {
+            pdfToPrinterOptions.portrait = true;
+          }
+          
+          if (printOptions.duplex) {
+            pdfToPrinterOptions.duplex = true;
+          }
+          
+          if (printOptions.pages) {
+            pdfToPrinterOptions.pages = printOptions.pages;
+          }
+          
+          if (printOptions.scale) {
+            pdfToPrinterOptions.scale = printOptions.scale;
+          }
+          
+          console.log('Printing with pdf-to-printer options:', pdfToPrinterOptions);
+          
+          await printer.print(tempFilePath, pdfToPrinterOptions);
+          console.log('Print job sent to printer via pdf-to-printer');
+        }
+        
+        // Update user's points
+        user.points = Math.max(0, user.points - pointsToDeduct);
+        await user.save();
+        
+        // Update booth manager's paper count
+        boothManager.loadedPaper = Math.max(0, boothManager.loadedPaper - paperToDeduct);
+        await boothManager.save();
+        
+        // Update print job with booth tracking information
+        printJob.status = 'completed';
+        printJob.printedByBooth = boothManagerId;
+        printJob.printedAt = new Date();
+        printJob.paperUsed = paperToDeduct;
+        await printJob.save();
+        
+        // Delete the file from Cloudinary
+        try {
+          if (printJob.cloudinaryPublicId) {
+            await cloudinary.uploader.destroy(printJob.cloudinaryPublicId, { resource_type: 'raw' });
+          }
+        } catch (deleteError) {
+          console.error(`Error deleting file from Cloudinary: ${deleteError.message}`);
+        }
+        
+        // Send success response
+        const response = {
+          message: 'Print job sent to printer successfully',
+          printJob: {
+            id: printJob._id,
+            status: printJob.status,
+            pointsUsed: pointsToDeduct,
+            paperUsed: paperToDeduct,
+            printedByBooth: boothManager.boothName,
+            printedAt: printJob.printedAt
+          },
+          user: {
+            id: user._id,
+            points: user.points
+          },
+          booth: {
+            id: boothManager._id,
+            name: boothManager.boothName,
+            remainingPaper: boothManager.loadedPaper
+          }
+        };
+        
+        // Clean up the temporary file after sending the response
+        setTimeout(() => {
+          fs.unlink(tempFilePath, (err) => {
+            if (err) console.error('Error deleting temp file:', err);
+            else console.log(`Temporary file deleted: ${tempFilePath}`);
+          });
+        }, 5000);
+        
+        return res.status(200).json(response);
+      } catch (printError) {
+        console.error('Error sending to printer:', printError);
+        
+        // Clean up the temporary file
+        fs.unlink(tempFilePath, (err) => {
+          if (err) console.error('Error deleting temp file:', err);
+        });
+        
+        return res.status(500).json({ 
+          message: 'Failed to print document. Printer error.', 
+          error: printError.message 
+        });
+      }
+    } catch (pdfError) {
+      console.error('Error fetching PDF for printing:', pdfError);
+      const statusCode = pdfError.response?.status;
+      if (statusCode === 404) {
+        return res.status(404).json({
+          message: 'PDF file not found in cloud storage. It may have been deleted or expired.',
+          error: pdfError.message
+        });
+      }
+      return res.status(500).json({ 
+        message: 'Failed to fetch PDF for printing', 
+        error: pdfError.message 
+      });
+    }
+  } catch (error) {
+    console.error('Error printing job with booth tracking:', error);
+    return res.status(500).json({ 
+      message: 'Failed to print job', 
+      error: error.message 
+    });
+  }
+};
+
+// Print a job directly and mark it as completed (original function for public access)
 exports.printJobNow = async (req, res) => {
   try {
     const { jobId } = req.params;
