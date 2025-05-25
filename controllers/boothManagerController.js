@@ -247,8 +247,15 @@ exports.updatePaperCount = async (req, res) => {
     // Update paper count based on operation
     if (operation === 'add') {
       boothManager.loadedPaper = boothManager.loadedPaper + Number(loadedPaper);
+    } else if (operation === 'remove') {
+      boothManager.loadedPaper = Math.max(0, boothManager.loadedPaper - Number(loadedPaper));
     } else if (operation === 'set') {
       boothManager.loadedPaper = Number(loadedPaper);
+    } else {
+      return res.status(400).json({ 
+        success: false, 
+        message: 'Invalid operation. Use "add", "remove", or "set"' 
+      });
     }
 
     // Check if loaded paper exceeds capacity
@@ -263,8 +270,21 @@ exports.updatePaperCount = async (req, res) => {
     res.status(200).json({
       success: true,
       message: 'Paper count updated successfully',
-      loadedPaper: updatedBoothManager.loadedPaper,
-      paperCapacity: updatedBoothManager.paperCapacity
+      boothManager: {
+        _id: updatedBoothManager._id,
+        name: updatedBoothManager.name,
+        email: updatedBoothManager.email,
+        boothName: updatedBoothManager.boothName,
+        boothLocation: updatedBoothManager.boothLocation,
+        boothNumber: updatedBoothManager.boothNumber,
+        paperCapacity: updatedBoothManager.paperCapacity,
+        loadedPaper: updatedBoothManager.loadedPaper,
+        printerName: updatedBoothManager.printerName,
+        printerModel: updatedBoothManager.printerModel,
+        isActive: updatedBoothManager.isActive,
+        role: updatedBoothManager.role,
+        updatedAt: updatedBoothManager.updatedAt
+      }
     });
   } catch (error) {
     res.status(500).json({ success: false, message: 'Server error', error: error.message });
