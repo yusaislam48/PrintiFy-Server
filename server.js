@@ -7,6 +7,7 @@ const authRoutes = require('./routes/auth');
 const userRoutes = require('./routes/user');
 const printRoutes = require('./routes/print');
 const adminRoutes = require('./routes/admin');
+const boothManagerRoutes = require('./routes/boothManager');
 const { cloudinary } = require('./config/cloudinary');
 const axios = require('axios');
 
@@ -74,6 +75,7 @@ app.use('/api/auth', authRoutes);
 app.use('/api/users', userRoutes);
 app.use('/api/print', printRoutes);
 app.use('/api/admin', adminRoutes);
+app.use('/api/booth-managers', boothManagerRoutes);
 
 // PDF Proxy route - handles /pdf-proxy/* requests
 app.get('/pdf-proxy/:cloud_name/raw/upload/:file_path', async (req, res) => {

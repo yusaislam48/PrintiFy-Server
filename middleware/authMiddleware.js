@@ -1,5 +1,6 @@
 const jwt = require('jsonwebtoken');
 const User = require('../models/User');
+const BoothManager = require('../models/BoothManager');
 const jwtConfig = require('../config/jwt');
 
 // Middleware to protect routes - requires valid JWT
@@ -77,5 +78,27 @@ exports.masterAdmin = async (req, res, next) => {
   } catch (error) {
     console.error('Master admin middleware error:', error);
     res.status(500).json({ message: 'Server error in master admin middleware' });
+  }
+};
+
+// Middleware to restrict routes to booth managers only
+exports.boothManager = async (req, res, next) => {
+  try {
+    // Get booth manager from database
+    const boothManager = await BoothManager.findById(req.user.id);
+    
+    if (!boothManager) {
+      return res.status(404).json({ message: 'Booth manager not found' });
+    }
+    
+    // Check if user is a booth manager
+    if (boothManager.role === 'boothManager' && boothManager.isActive) {
+      next();
+    } else {
+      return res.status(403).json({ message: 'Not authorized as booth manager' });
+    }
+  } catch (error) {
+    console.error('Booth manager middleware error:', error);
+    res.status(500).json({ message: 'Server error in booth manager middleware' });
   }
 }; 
