@@ -70,19 +70,6 @@ const printJobSchema = new mongoose.Schema({
     enum: ['pending', 'processing', 'completed', 'failed', 'cancelled'],
     default: 'pending'
   },
-  printedByBooth: {
-    type: mongoose.Schema.Types.ObjectId,
-    ref: 'BoothManager',
-    default: null
-  },
-  printedAt: {
-    type: Date,
-    default: null
-  },
-  paperUsed: {
-    type: Number,
-    default: 0
-  },
   createdAt: {
     type: Date,
     default: Date.now
