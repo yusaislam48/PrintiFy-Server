@@ -1,6 +1,6 @@
 const User = require('../models/User');
 const PrintJob = require('../models/PrintJob');
-const { cloudinary } = require('../config/cloudinary');
+const fs = require('fs');
 
 // Get all users with pagination
 exports.getAllUsers = async (req, res) => {
@@ -276,12 +276,13 @@ exports.deletePrintJob = async (req, res) => {
       return res.status(404).json({ message: 'Print job not found' });
     }
     
-    // Delete file from Cloudinary if it exists
-    if (printJob.cloudinaryPublicId) {
+    // Delete file from VPS storage if it exists
+    if (printJob.localFilePath && fs.existsSync(printJob.localFilePath)) {
       try {
-        await cloudinary.uploader.destroy(printJob.cloudinaryPublicId, { resource_type: 'raw' });
+        fs.unlinkSync(printJob.localFilePath);
+        console.log(`Deleted file: ${printJob.localFilePath}`);
       } catch (deleteError) {
-        console.error('Error deleting file from Cloudinary:', deleteError);
+        console.error('Error deleting file from VPS storage:', deleteError);
       }
     }
     

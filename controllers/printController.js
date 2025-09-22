@@ -1,4 +1,3 @@
-const { cloudinary, getSignedUrl, getProxyUrl } = require('../config/cloudinary');
 const PrintJob = require('../models/PrintJob');
 const fs = require('fs');
 const path = require('path');
@@ -7,36 +6,23 @@ const printer = require('pdf-to-printer');
 const os = require('os');
 const { exec } = require('child_process');
 
-// Handle PDF upload to Cloudinary
+// Handle PDF upload to VPS storage
 exports.uploadPDF = async (req, res) => {
   try {
     if (!req.file) {
       return res.status(400).json({ message: 'No PDF file uploaded' });
     }
 
-    // Get user ID from authenticated request
     const userId = req.user.id;
+    const filePath = req.file.path;
+    const fileName = req.file.filename;
+    const fileSize = req.file.size;
 
-    // Create a unique public ID
-    const publicId = `printify/pdfs/${userId}_${Date.now()}`;
-
-    // Upload to Cloudinary
-    const result = await cloudinary.uploader.upload(req.file.path, {
-      resource_type: 'raw',
-      public_id: publicId,
-      format: 'pdf',
-      access_mode: 'public',
-      type: 'upload',
-      overwrite: true,
-      use_filename: true,
-      unique_filename: true,
-      disposition: 'inline',
-      tags: ['pdf', 'printify']
-    });
-
-    // Generate both direct and proxy URLs for secure access
-    const directUrl = getSignedUrl(publicId);
-    const proxyUrl = getProxyUrl(publicId);
+    // Generate URLs for file access
+    const relativePath = path.relative(path.join(__dirname, '../storage/pdfs'), filePath);
+    const pathParts = relativePath.split(path.sep); // [year, month, day, filename]
+    const fileUrl = `/api/print/files/pdf/${pathParts.join('/')}`;
+    const downloadUrl = `/api/print/files/download/${pathParts.join('/')}`;
 
     // Parse printing settings from request
     const printSettings = {
@@ -55,13 +41,19 @@ exports.uploadPDF = async (req, res) => {
     // Calculate points needed for this job - 1 point per page
     const pointsNeeded = printSettings.totalPages > 0 ? printSettings.totalPages : 1;
 
+    // Set deletion time (72 hours from now)
+    const deleteAfter = new Date();
+    deleteAfter.setHours(deleteAfter.getHours() + 72);
+
     // Create a new print job in database
     const printJob = new PrintJob({
       userId,
       fileName: req.file.originalname,
-      fileUrl: directUrl,
-      proxyUrl: proxyUrl,
-      cloudinaryPublicId: result.public_id,
+      fileUrl: fileUrl,
+      proxyUrl: downloadUrl,
+      localFilePath: filePath,
+      fileSize: fileSize,
+      deleteAfter: deleteAfter,
       pointsUsed: pointsNeeded,
       printSettings,
       status: 'pending'
@@ -69,18 +61,13 @@ exports.uploadPDF = async (req, res) => {
 
     await printJob.save();
 
-    // Delete temp file after successful upload
-    fs.unlink(req.file.path, (err) => {
-      if (err) console.error('Error deleting temp file:', err);
-    });
-
     return res.status(201).json({
       message: 'PDF uploaded successfully',
       printJob: {
         id: printJob._id,
         fileName: printJob.fileName,
-        fileUrl: directUrl,
-        proxyUrl: proxyUrl,
+        fileUrl: printJob.fileUrl,
+        proxyUrl: printJob.proxyUrl,
         status: printJob.status,
         createdAt: printJob.createdAt,
         printSettings: printJob.printSettings,
@@ -91,7 +78,7 @@ exports.uploadPDF = async (req, res) => {
     console.error('PDF upload error:', error);
     
     // Delete temp file if it exists
-    if (req.file && req.file.path) {
+    if (req.file && req.file.path && fs.existsSync(req.file.path)) {
       fs.unlink(req.file.path, (err) => {
         if (err) console.error('Error deleting temp file:', err);
       });
@@ -101,133 +88,82 @@ exports.uploadPDF = async (req, res) => {
   }
 };
 
-// Get all print jobs for current user
-exports.getUserPrintJobs = async (req, res) => {
+// Get all print jobs for a user
+exports.getPrintJobs = async (req, res) => {
   try {
     const userId = req.user.id;
-    
+    const page = parseInt(req.query.page) || 1;
+    const limit = parseInt(req.query.limit) || 10;
+    const skip = (page - 1) * limit;
+
+    // Get total count for pagination
+    const totalJobs = await PrintJob.countDocuments({ userId });
+
+    // Get print jobs with pagination, sorted by creation date (newest first)
     const printJobs = await PrintJob.find({ userId })
       .sort({ createdAt: -1 })
-      .select('-cloudinaryPublicId');
-      
-    return res.status(200).json({ printJobs });
+      .skip(skip)
+      .limit(limit)
+      .select('-localFilePath'); // Don't expose file paths
+
+    const totalPages = Math.ceil(totalJobs / limit);
+
+    // Add URLs to each job for frontend access
+    const jobsWithUrls = printJobs.map(job => {
+      const jobObject = job.toObject();
+      return {
+        ...jobObject,
+        fileUrl: jobObject.fileUrl,
+        downloadUrl: jobObject.proxyUrl
+      };
+    });
+
+    res.json({
+      success: true,
+      printJobs: jobsWithUrls,
+      pagination: {
+        currentPage: page,
+        totalPages,
+        totalJobs,
+        hasMore: page < totalPages
+      }
+    });
   } catch (error) {
     console.error('Error fetching print jobs:', error);
-    return res.status(500).json({ message: 'Failed to fetch print jobs', error: error.message });
-  }
-};
-
-// Get specific print job
-exports.getPrintJob = async (req, res) => {
-  try {
-    const { jobId } = req.params;
-    const userId = req.user.id;
-    
-    const printJob = await PrintJob.findOne({ _id: jobId, userId });
-      
-    if (!printJob) {
-      return res.status(404).json({ message: 'Print job not found' });
-    }
-    
-    // Generate fresh URLs for access
-    const directUrl = getSignedUrl(printJob.cloudinaryPublicId);
-    const proxyUrl = getProxyUrl(printJob.cloudinaryPublicId);
-    
-    return res.status(200).json({ 
-      printJob: {
-        ...printJob.toObject(),
-        fileUrl: directUrl,
-        proxyUrl: proxyUrl,
-        cloudinaryPublicId: undefined
-      }
-    });
-  } catch (error) {
-    console.error('Error fetching print job:', error);
-    return res.status(500).json({ message: 'Failed to fetch print job', error: error.message });
-  }
-};
-
-// Cancel a print job
-exports.cancelPrintJob = async (req, res) => {
-  try {
-    const { jobId } = req.params;
-    const userId = req.user.id;
-    
-    const printJob = await PrintJob.findOne({ _id: jobId, userId });
-      
-    if (!printJob) {
-      return res.status(404).json({ message: 'Print job not found' });
-    }
-    
-    // Can only cancel jobs that are pending or processing
-    if (printJob.status !== 'pending' && printJob.status !== 'processing') {
-      return res.status(400).json({ 
-        message: `Cannot cancel a job with status: ${printJob.status}` 
-      });
-    }
-    
-    printJob.status = 'cancelled';
-    await printJob.save();
-    
-    return res.status(200).json({ 
-      message: 'Print job cancelled successfully',
-      printJob: {
-        id: printJob._id,
-        status: printJob.status
-      }
-    });
-  } catch (error) {
-    console.error('Error cancelling print job:', error);
-    return res.status(500).json({ message: 'Failed to cancel print job', error: error.message });
+    res.status(500).json({ message: 'Failed to fetch print jobs', error: error.message });
   }
 };
 
 // Download a PDF file directly
 exports.downloadPDF = async (req, res) => {
   try {
-    const { jobId } = req.params;
-    const userId = req.user.id;
+    const { year, month, day, filename } = req.params;
+    const relativePath = path.join(year, month, day, filename);
+    const filePath = path.join(__dirname, '../storage/pdfs', relativePath);
     
-    // Find the print job
-    const printJob = await PrintJob.findOne({ _id: jobId, userId });
-      
-    if (!printJob) {
-      return res.status(404).json({ message: 'Print job not found' });
+    // Security check - ensure the file is within our storage directory
+    const resolvedPath = path.resolve(filePath);
+    const storageDir = path.resolve(path.join(__dirname, '../storage/pdfs'));
+    if (!resolvedPath.startsWith(storageDir)) {
+      return res.status(403).json({ message: 'Access denied' });
     }
-    
-    // Get the cloudinary public ID
-    const publicId = printJob.cloudinaryPublicId;
-    
-    // Create a direct download URL with attachment disposition
-    const downloadOptions = {
-      resource_type: 'raw',
-      type: 'upload',
-      format: 'pdf',
-      flags: 'attachment',  // Force download
-      secure: true,
-      sign_url: true
-    };
-    
-    const downloadUrl = cloudinary.url(publicId, downloadOptions);
-    
-    try {
-      // Fetch the file from Cloudinary
-      const response = await axios({
-        url: downloadUrl,
-        method: 'GET',
-        responseType: 'stream'
-      });
-      
-      // Set appropriate headers for download
-      res.setHeader('Content-Type', 'application/pdf');
-      res.setHeader('Content-Disposition', `attachment; filename="${printJob.fileName}"`);
-      
-      // Stream the file to the client
-      response.data.pipe(res);
-    } catch (error) {
-      console.error('Error streaming PDF from Cloudinary:', error);
-      return res.status(500).json({ message: 'Failed to download PDF from cloud storage' });
+
+    if (!fs.existsSync(filePath)) {
+      return res.status(404).json({ message: 'File not found' });
     }
+
+    // Get file stats
+    const stats = fs.statSync(filePath);
+
+    // Set headers for download
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Length', stats.size);
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+    
+    // Stream the file
+    const fileStream = fs.createReadStream(filePath);
+    fileStream.pipe(res);
+
   } catch (error) {
     console.error('Error downloading PDF:', error);
     return res.status(500).json({ message: 'Failed to download PDF', error: error.message });
@@ -237,179 +173,36 @@ exports.downloadPDF = async (req, res) => {
 // View a PDF file in the browser
 exports.viewPDF = async (req, res) => {
   try {
-    const { jobId } = req.params;
-    const userId = req.user.id;
+    const { year, month, day, filename } = req.params;
+    const relativePath = path.join(year, month, day, filename);
+    const filePath = path.join(__dirname, '../storage/pdfs', relativePath);
     
-    // Find the print job
-    const printJob = await PrintJob.findOne({ _id: jobId, userId });
-      
-    if (!printJob) {
-      return res.status(404).json({ message: 'Print job not found' });
+    // Security check - ensure the file is within our storage directory
+    const resolvedPath = path.resolve(filePath);
+    const storageDir = path.resolve(path.join(__dirname, '../storage/pdfs'));
+    if (!resolvedPath.startsWith(storageDir)) {
+      return res.status(403).json({ message: 'Access denied' });
     }
+
+    if (!fs.existsSync(filePath)) {
+      return res.status(404).json({ message: 'File not found' });
+    }
+
+    // Get file stats
+    const stats = fs.statSync(filePath);
+
+    // Set headers for viewing in browser
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Length', stats.size);
+    res.setHeader('Content-Disposition', 'inline');
     
-    // Get the cloudinary public ID
-    const publicId = printJob.cloudinaryPublicId;
-    
-    // Create a view URL with inline disposition
-    const viewOptions = {
-      resource_type: 'raw',
-      type: 'upload',
-      format: 'pdf',
-      flags: 'attachment:false',  // Don't force download
-      disposition: 'inline',       // Display in browser
-      secure: true,
-      sign_url: true
-    };
-    
-    const viewUrl = cloudinary.url(publicId, viewOptions);
-    
-    // Redirect to the Cloudinary URL
-    return res.redirect(viewUrl);
+    // Stream the file
+    const fileStream = fs.createReadStream(filePath);
+    fileStream.pipe(res);
+
   } catch (error) {
     console.error('Error viewing PDF:', error);
     return res.status(500).json({ message: 'Failed to view PDF', error: error.message });
-  }
-};
-
-// Find print jobs by student ID or RFID Card Number (public endpoint - no auth required)
-exports.findPrintJobsByStudentId = async (req, res) => {
-  try {
-    const { studentId } = req.params;
-    const User = require('../models/User'); // Import User model
-    
-    if (!studentId) {
-      return res.status(400).json({ message: 'Invalid search parameter' });
-    }
-    
-    let user;
-    
-    // Check if it's a Student ID (7 digits not starting with 0)
-    if (/^[1-9]\d{6}$/.test(studentId)) {
-      // Find the user by student ID
-      user = await User.findOne({ studentId });
-    } 
-    // Check if it's a RFID Card Number (10 digits starting with 0)
-    else if (/^0\d{9}$/.test(studentId)) {
-      // Find the user by RFID Card Number
-      user = await User.findOne({ rfidCardNumber: studentId });
-    } else {
-      return res.status(400).json({ message: 'Invalid ID format. Must be either a 7-digit Student ID not starting with 0 or a 10-digit RFID Card Number starting with 0.' });
-    }
-    
-    if (!user) {
-      return res.status(404).json({ message: 'No user found with this ID or RFID Card' });
-    }
-    
-    // Find pending print jobs for this user
-    const pendingPrintJobs = await PrintJob.find({ 
-      userId: user._id,
-      status: { $in: ['pending', 'processing'] }
-    }).sort({ createdAt: -1 });
-    
-    // Generate fresh URLs for each job
-    const jobsWithUrls = pendingPrintJobs.map(job => {
-      const directUrl = getSignedUrl(job.cloudinaryPublicId);
-      const proxyUrl = getProxyUrl(job.cloudinaryPublicId);
-      
-      return {
-        ...job.toObject(),
-        fileUrl: directUrl,
-        proxyUrl: proxyUrl,
-        cloudinaryPublicId: undefined
-      };
-    });
-    
-    return res.status(200).json({ 
-      studentName: user.name,
-      userPoints: user.points || 0, // Include user points in the response
-      pendingPrintJobs: jobsWithUrls
-    });
-  } catch (error) {
-    console.error('Error finding print jobs by search parameter:', error);
-    return res.status(500).json({ 
-      message: 'Failed to find print jobs', 
-      error: error.message 
-    });
-  }
-};
-
-// Mark a print job as completed and deduct points
-exports.markPrintJobAsCompleted = async (req, res) => {
-  try {
-    const { jobId } = req.params;
-    const User = require('../models/User'); // Import User model
-    
-    // Find the print job
-    const printJob = await PrintJob.findById(jobId);
-    
-    if (!printJob) {
-      return res.status(404).json({ message: 'Print job not found' });
-    }
-    
-    // Can only complete jobs that are pending or processing
-    if (printJob.status !== 'pending' && printJob.status !== 'processing') {
-      return res.status(400).json({ 
-        message: `Cannot complete a job with status: ${printJob.status}` 
-      });
-    }
-    
-    // Find the user who owns this print job
-    const user = await User.findById(printJob.userId);
-    
-    if (!user) {
-      return res.status(404).json({ message: 'User not found' });
-    }
-    
-    // Calculate points to deduct (should be set during upload, but fallback to total pages if needed)
-    const pointsToDeduct = printJob.pointsUsed || printJob.printSettings.totalPages || 1;
-    
-    // Check if user has enough points
-    if (user.points < pointsToDeduct) {
-      return res.status(400).json({
-        message: 'User does not have enough points',
-        required: pointsToDeduct,
-        available: user.points
-      });
-    }
-    
-    // Update user's points
-    user.points = Math.max(0, user.points - pointsToDeduct); // Ensure points don't go below 0
-    await user.save();
-    
-    // Update print job status
-    printJob.status = 'completed';
-    await printJob.save();
-    
-    // Delete the file from Cloudinary
-    try {
-      if (printJob.cloudinaryPublicId) {
-        console.log(`Attempting to delete file from Cloudinary: ${printJob.cloudinaryPublicId}`);
-        await cloudinary.uploader.destroy(printJob.cloudinaryPublicId, { resource_type: 'raw' });
-        console.log(`Successfully deleted file from Cloudinary: ${printJob.cloudinaryPublicId}`);
-      }
-    } catch (deleteError) {
-      console.error(`Error deleting file from Cloudinary: ${deleteError.message}`);
-      // Continue with the response even if file deletion fails
-    }
-    
-    return res.status(200).json({
-      message: 'Print job completed successfully',
-      printJob: {
-        id: printJob._id,
-        status: printJob.status,
-        pointsUsed: pointsToDeduct
-      },
-      user: {
-        id: user._id,
-        points: user.points
-      }
-    });
-  } catch (error) {
-    console.error('Error marking print job as completed:', error);
-    return res.status(500).json({ 
-      message: 'Failed to mark print job as completed', 
-      error: error.message 
-    });
   }
 };
 
@@ -418,136 +211,360 @@ exports.viewPublicPDF = async (req, res) => {
   try {
     const { jobId } = req.params;
     
-    if (!jobId || !jobId.match(/^[0-9a-fA-F]{24}$/)) {
-      console.error(`Invalid job ID format: ${jobId}`);
-      return res.status(400).json({ message: 'Invalid job ID format' });
-    }
-    
     console.log(`Attempting to view PDF for job: ${jobId}`);
     
-    // Find the print job without requiring user authentication
-    const printJob = await PrintJob.findById(jobId).lean();
+    // Find the print job by ID (no user restriction for public view)
+    const printJob = await PrintJob.findById(jobId);
     
     if (!printJob) {
-      console.error(`Print job not found with ID: ${jobId}`);
-      
-      // Try to find by comparing string representation instead
-      const allJobs = await PrintJob.find().limit(10);
-      console.log('Available jobs:', allJobs.map(j => ({ id: j._id.toString(), filename: j.fileName })));
-      
       return res.status(404).json({ message: 'Print job not found' });
     }
-    
-    console.log(`Found print job: ${printJob.fileName}, ID: ${printJob._id}`);
-    console.log('Print job details:', JSON.stringify({
-      id: printJob._id,
-      filename: printJob.fileName,
-      hasCloudinaryId: !!printJob.cloudinaryPublicId
-    }));
-    
-    // Get the cloudinary public ID
-    const publicId = printJob.cloudinaryPublicId;
-    
-    if (!publicId) {
-      console.error('Missing cloudinary public ID');
-      return res.status(404).json({ message: 'PDF file reference not found' });
+
+    // Check if file exists
+    if (!fs.existsSync(printJob.localFilePath)) {
+      return res.status(404).json({ message: 'PDF file not found' });
     }
+
+    // Get file stats
+    const stats = fs.statSync(printJob.localFilePath);
+
+    // Set headers for viewing
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Length', stats.size);
+    res.setHeader('Content-Disposition', 'inline');
     
-    console.log(`Using cloudinary public ID: ${publicId}`);
-    
-    // Create a view URL with inline disposition
-    const viewOptions = {
-      resource_type: 'raw',
-      type: 'upload',
-      flags: req.query.download === 'true' ? 'attachment' : 'attachment:false',
-      disposition: req.query.download === 'true' ? 'attachment' : 'inline',
-      secure: true,
-      sign_url: true
-    };
-    
-    // Ensure we don't have double extensions in the URL
-    let formattedPublicId = publicId;
-    if (formattedPublicId.endsWith('.pdf')) {
-      // Don't add format if the public ID already has .pdf extension
-      viewOptions.format = null;
-    } else {
-      viewOptions.format = 'pdf';
-    }
-    
-    const viewUrl = cloudinary.url(formattedPublicId, viewOptions);
-    console.log(`Generated Cloudinary URL: ${viewUrl}`);
-    
-    // Fetch and stream the PDF from Cloudinary
-    try {
-      const response = await axios({
-        url: viewUrl,
-        method: 'GET',
-        responseType: 'stream',
-        timeout: 15000 // 15 second timeout
-      });
-      
-      // Set appropriate headers
-      res.setHeader('Content-Type', 'application/pdf');
-      res.setHeader('Content-Disposition', req.query.download === 'true' ? 
-        `attachment; filename="${printJob.fileName}"` : 'inline');
-      
-      // Add CORS headers to avoid browser restrictions
-      res.setHeader('Access-Control-Allow-Origin', '*');
-      res.setHeader('Access-Control-Allow-Methods', 'GET');
-      res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
-      
-      // Stream the file to the client
-      response.data.pipe(res);
-    } catch (error) {
-      console.error('Error streaming PDF from Cloudinary:', error);
-      
-      // Try an alternative URL construction as a fallback
-      try {
-        console.log('Trying alternative URL format...');
-        // Remove .pdf extension if it's there to avoid doubling
-        const altPublicId = publicId.endsWith('.pdf') ? publicId : `${publicId}.pdf`;
-        const altUrl = `https://res.cloudinary.com/${process.env.CLOUDINARY_CLOUD_NAME}/raw/upload/fl_attachment:false/${altPublicId}`;
-        console.log(`Alternative URL: ${altUrl}`);
-        
-        const altResponse = await axios({
-          url: altUrl,
-          method: 'GET',
-          responseType: 'stream',
-          timeout: 15000
-        });
-        
-        // Set appropriate headers
-        res.setHeader('Content-Type', 'application/pdf');
-        res.setHeader('Content-Disposition', req.query.download === 'true' ? 
-          `attachment; filename="${printJob.fileName}"` : 'inline');
-        
-        // Add CORS headers
-        res.setHeader('Access-Control-Allow-Origin', '*');
-        res.setHeader('Access-Control-Allow-Methods', 'GET');
-        res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
-        
-        // Stream the file to the client
-        altResponse.data.pipe(res);
-      } catch (fallbackError) {
-        console.error('Fallback URL also failed:', fallbackError.message);
-        return res.status(500).json({ 
-          message: 'Failed to stream PDF from cloud storage',
-          error: error.message,
-          fallbackError: fallbackError.message
-        });
-      }
-    }
+    // Stream the file
+    const fileStream = fs.createReadStream(printJob.localFilePath);
+    fileStream.pipe(res);
+
   } catch (error) {
     console.error('Error viewing public PDF:', error);
     return res.status(500).json({ message: 'Failed to view PDF', error: error.message });
   }
 };
 
-// Print a job directly and mark it as completed
-exports.printJobNow = async (req, res) => {
+// Print a PDF file
+exports.printPDF = async (req, res) => {
   try {
     const { jobId } = req.params;
-    const User = require('../models/User'); // Import User model
+    const userId = req.user.id;
+
+    // Find the print job
+    const printJob = await PrintJob.findOne({ _id: jobId, userId });
+
+    if (!printJob) {
+      return res.status(404).json({ message: 'Print job not found' });
+    }
+
+    // Check if the file exists
+    if (!fs.existsSync(printJob.localFilePath)) {
+      return res.status(404).json({ message: 'PDF file not found' });
+    }
+
+    // Update print job status
+    printJob.status = 'processing';
+    await printJob.save();
+
+    // Get print options from request body or use defaults from printJob
+    const printOptions = {
+      copies: req.body.copies || printJob.printSettings.copies || 1,
+      paperSize: req.body.paperSize || printJob.printSettings.paperSize || 'a4',
+      colorMode: req.body.colorMode || printJob.printSettings.colorMode || 'color',
+      orientation: req.body.orientation || printJob.printSettings.layout || 'portrait',
+      duplex: req.body.duplex || printJob.printSettings.printBothSides || false,
+      pages: req.body.pages || printJob.printSettings.customPageRange || 'all'
+    };
+
+    console.log(`Printing PDF: ${printJob.localFilePath}`);
+    console.log('Print options:', printOptions);
+
+    try {
+      // Handle printing based on platform
+      if (process.platform === 'darwin') {
+        // macOS - use lpr command or open with Preview
+        const printCommand = `lpr -P "Default" "${printJob.localFilePath}"`;
+        
+        exec(printCommand, (error, stdout, stderr) => {
+          if (error) {
+            console.log('Direct print failed, opening in Preview:', error.message);
+            // Fallback: open in Preview for manual printing
+            exec(`open "${printJob.localFilePath}"`, (openError) => {
+              if (openError) {
+                console.error('Failed to open in Preview:', openError);
+              } else {
+                console.log('PDF opened in Preview for manual printing');
+              }
+            });
+          } else {
+            console.log('Print command executed successfully');
+          }
+        });
+      } else {
+        // Windows/Linux - use pdf-to-printer
+        const pdfToPrinterOptions = {};
+
+        if (printOptions.copies > 1) {
+          pdfToPrinterOptions.copies = printOptions.copies;
+        }
+
+        if (printOptions.colorMode === 'bw') {
+          pdfToPrinterOptions.monochrome = true;
+        } else {
+          pdfToPrinterOptions.color = true;
+        }
+
+        if (printOptions.orientation === 'landscape') {
+          pdfToPrinterOptions.landscape = true;
+        } else {
+          pdfToPrinterOptions.portrait = true;
+        }
+
+        if (printOptions.duplex) {
+          pdfToPrinterOptions.duplex = true;
+        }
+
+        if (printOptions.pages && printOptions.pages !== 'all') {
+          pdfToPrinterOptions.pages = printOptions.pages;
+        }
+
+        console.log('Printing with pdf-to-printer options:', pdfToPrinterOptions);
+
+        await printer.print(printJob.localFilePath, pdfToPrinterOptions);
+        console.log('Print job sent to printer via pdf-to-printer');
+      }
+
+      // Update job status to completed
+      printJob.status = 'completed';
+      printJob.updatedAt = new Date();
+      await printJob.save();
+
+      // Delete the file immediately after printing
+      if (fs.existsSync(printJob.localFilePath)) {
+        fs.unlink(printJob.localFilePath, (err) => {
+          if (err) {
+            console.error('Error deleting file after printing:', err);
+          } else {
+            console.log('File deleted successfully after printing');
+          }
+        });
+      }
+
+      // Remove the print job from database as well
+      await PrintJob.findByIdAndDelete(jobId);
+
+      res.json({
+        success: true,
+        message: 'Print job completed successfully',
+        printJob: {
+          id: printJob._id,
+          status: 'completed',
+          fileName: printJob.fileName
+        }
+      });
+
+    } catch (printError) {
+      console.error('Print execution error:', printError);
+      
+      // Update job status to failed
+      printJob.status = 'failed';
+      await printJob.save();
+
+      res.status(500).json({
+        success: false,
+        message: 'Failed to print PDF',
+        error: printError.message
+      });
+    }
+
+  } catch (error) {
+    console.error('Error in printPDF:', error);
+    res.status(500).json({ message: 'Failed to process print request', error: error.message });
+  }
+};
+
+// Delete a print job and its associated file
+exports.deletePrintJob = async (req, res) => {
+  try {
+    const { jobId } = req.params;
+    const userId = req.user.id;
+
+    // Find the print job
+    const printJob = await PrintJob.findOne({ _id: jobId, userId });
+
+    if (!printJob) {
+      return res.status(404).json({ message: 'Print job not found' });
+    }
+
+    // Delete the file if it exists
+    if (fs.existsSync(printJob.localFilePath)) {
+      try {
+        fs.unlinkSync(printJob.localFilePath);
+        console.log(`Deleted file: ${printJob.localFilePath}`);
+      } catch (deleteError) {
+        console.error(`Error deleting file: ${deleteError.message}`);
+      }
+    }
+
+    // Delete the print job from database
+    await PrintJob.findByIdAndDelete(jobId);
+
+    res.json({
+      success: true,
+      message: 'Print job deleted successfully'
+    });
+
+  } catch (error) {
+    console.error('Error deleting print job:', error);
+    res.status(500).json({ message: 'Failed to delete print job', error: error.message });
+  }
+};
+
+// Cleanup expired files (called periodically)
+exports.cleanupExpiredFiles = async () => {
+  try {
+    console.log('Starting cleanup of expired files...');
+    
+    // Find all expired print jobs
+    const expiredJobs = await PrintJob.find({
+      deleteAfter: { $lte: new Date() }
+    });
+
+    console.log(`Found ${expiredJobs.length} expired jobs`);
+
+    for (const job of expiredJobs) {
+      try {
+        // Delete the file if it exists
+        if (fs.existsSync(job.localFilePath)) {
+          fs.unlinkSync(job.localFilePath);
+          console.log(`Deleted expired file: ${job.localFilePath}`);
+        }
+
+        // Delete the job from database
+        await PrintJob.findByIdAndDelete(job._id);
+        console.log(`Deleted expired job: ${job._id}`);
+
+      } catch (deleteError) {
+        console.error(`Error cleaning up job ${job._id}:`, deleteError);
+      }
+    }
+
+    console.log('Cleanup completed');
+
+  } catch (error) {
+    console.error('Error during cleanup:', error);
+  }
+};
+
+// Get print jobs for a specific user (by user ID)
+exports.getUserPrintJobs = exports.getPrintJobs;
+
+// Get a specific print job
+exports.getPrintJob = async (req, res) => {
+  try {
+    const { jobId } = req.params;
+    const userId = req.user.id;
+    
+    // Find the print job
+    const printJob = await PrintJob.findOne({ _id: jobId, userId })
+      .select('-localFilePath'); // Don't expose file paths
+    
+    if (!printJob) {
+      return res.status(404).json({ message: 'Print job not found' });
+    }
+
+    res.json({
+      success: true,
+      printJob
+    });
+  } catch (error) {
+    console.error('Error fetching print job:', error);
+    res.status(500).json({ message: 'Failed to fetch print job', error: error.message });
+  }
+};
+
+// Cancel a print job
+exports.cancelPrintJob = async (req, res) => {
+  try {
+    const { jobId } = req.params;
+    const userId = req.user.id;
+
+    // Find the print job
+    const printJob = await PrintJob.findOne({ _id: jobId, userId });
+
+    if (!printJob) {
+      return res.status(404).json({ message: 'Print job not found' });
+    }
+
+    if (printJob.status === 'completed') {
+      return res.status(400).json({ message: 'Cannot cancel completed print job' });
+    }
+
+    // Delete the file if it exists
+    if (printJob.localFilePath && fs.existsSync(printJob.localFilePath)) {
+      try {
+        fs.unlinkSync(printJob.localFilePath);
+        console.log(`Deleted file: ${printJob.localFilePath}`);
+      } catch (deleteError) {
+        console.error(`Error deleting file: ${deleteError.message}`);
+      }
+    }
+
+    // Update job status
+    printJob.status = 'cancelled';
+    printJob.updatedAt = new Date();
+    await printJob.save();
+
+    res.json({
+      success: true,
+      message: 'Print job cancelled and file deleted successfully',
+      printJob: {
+        id: printJob._id,
+        status: printJob.status
+      }
+    });
+
+  } catch (error) {
+    console.error('Error cancelling print job:', error);
+    res.status(500).json({ message: 'Failed to cancel print job', error: error.message });
+  }
+};
+
+// Find print jobs by student ID (public endpoint)
+exports.findPrintJobsByStudentId = async (req, res) => {
+  try {
+    const { studentId } = req.params;
+    
+    // Find user by student ID
+    const User = require('../models/User');
+    const user = await User.findOne({ studentId });
+    
+    if (!user) {
+      return res.status(404).json({ message: 'Student not found' });
+    }
+
+    // Find print jobs for this user
+    const printJobs = await PrintJob.find({ userId: user._id })
+      .select('-localFilePath -userId') // Don't expose sensitive data
+      .sort({ createdAt: -1 });
+
+    res.json({
+      success: true,
+      printJobs,
+      student: {
+        name: user.name,
+        studentId: user.studentId
+      }
+    });
+  } catch (error) {
+    console.error('Error finding print jobs by student ID:', error);
+    res.status(500).json({ message: 'Failed to find print jobs', error: error.message });
+  }
+};
+
+// Mark print job as completed (public endpoint for booth managers)
+exports.markPrintJobAsCompleted = async (req, res) => {
+  try {
+    const { jobId } = req.params;
     
     // Find the print job
     const printJob = await PrintJob.findById(jobId);
@@ -555,372 +572,127 @@ exports.printJobNow = async (req, res) => {
     if (!printJob) {
       return res.status(404).json({ message: 'Print job not found' });
     }
-    
-    // Can only print jobs that are pending or processing
-    if (printJob.status !== 'pending' && printJob.status !== 'processing') {
-      return res.status(400).json({ 
-        message: `Cannot print a job with status: ${printJob.status}` 
-      });
-    }
-    
-    // Find the user who owns this print job
-    const user = await User.findById(printJob.userId);
-    
-    if (!user) {
-      return res.status(404).json({ message: 'User not found' });
-    }
-    
-    // Calculate points to deduct
-    const pointsToDeduct = printJob.pointsUsed || printJob.printSettings.totalPages || 1;
-    
-    // Check if user has enough points
-    if (user.points < pointsToDeduct) {
-      return res.status(400).json({
-        message: 'User does not have enough points',
-        required: pointsToDeduct,
-        available: user.points
-      });
-    }
-    
-    // Get the cloudinary public ID and fetch the PDF for printing
-    const publicId = printJob.cloudinaryPublicId;
-    
-    if (!publicId) {
-      return res.status(404).json({ message: 'PDF file reference not found' });
-    }
-    
-    // Create a download URL to get the PDF
-    const downloadOptions = {
-      resource_type: 'raw',
-      type: 'upload',
-      format: 'pdf',
-      secure: true,
-      sign_url: true
-    };
-    
-    // Make sure we don't have double extensions in the URL
-    let formattedPublicId = publicId;
-    if (formattedPublicId.endsWith('.pdf')) {
-      // Remove .pdf extension if already present in the public ID
-      downloadOptions.format = null; // Don't add format if already in public ID
-    }
-    
-    console.log(`Using Cloudinary public ID for printing: ${formattedPublicId}`);
-    const downloadUrl = cloudinary.url(formattedPublicId, downloadOptions);
-    console.log(`Generated download URL: ${downloadUrl}`);
-    
-    try {
-      // Fetch the PDF file from Cloudinary
-      const pdfResponse = await axios({
-        url: downloadUrl,
-        method: 'GET',
-        responseType: 'arraybuffer',
-        timeout: 15000
-      });
-      
-      // Create a temporary file path for the PDF
-      const tempFilePath = path.join(os.tmpdir(), `printjob_${jobId}_${Date.now()}.pdf`);
-      
-      // Write the PDF data to a temporary file
-      fs.writeFileSync(tempFilePath, Buffer.from(pdfResponse.data));
-      console.log(`PDF saved to temporary file: ${tempFilePath}`);
-      
-      // Get print settings from the job
-      const printOptions = {};
-      
-      // Apply print settings if available
-      if (printJob.printSettings) {
-        // Set number of copies
-        if (printJob.printSettings.copies > 1) {
-          printOptions.copies = printJob.printSettings.copies;
-        }
-        
-        // Set color mode
-        if (printJob.printSettings.colorMode === 'bw') {
-          printOptions.monochrome = true;
-        }
-        
-        // Set double-sided printing
-        if (printJob.printSettings.printBothSides) {
-          printOptions.duplex = true;
-        }
-        
-        // Set page range if not "all"
-        if (printJob.printSettings.pageRange !== 'all' && printJob.printSettings.customPageRange) {
-          printOptions.pages = printJob.printSettings.customPageRange;
-        }
-        
-        // Set orientation
-        if (printJob.printSettings.layout === 'landscape') {
-          printOptions.landscape = true;
-        }
-      }
-      
-      console.log('Printing with options:', printOptions);
-      
-      try {
-        // Detect the operating system
-        const platform = os.platform();
-        console.log(`Detected platform: ${platform}`);
-        
-        if (platform === 'darwin') {
-          // macOS specific printing using multiple approaches
-          let printSuccess = false;
-          
-          // Approach 1: Using lp command
-          console.log('Trying lp command for printing...');
-          
-          try {
-            // Build lp command with options
-            let lpCommand = `lp "${tempFilePath}"`;
-            
-            // Add copies if specified
-            if (printOptions.copies) {
-              lpCommand += ` -n ${printOptions.copies}`;
-            }
-            
-            // Add orientation if landscape
-            if (printOptions.landscape) {
-              lpCommand += ` -o landscape`;
-            }
-            
-            // Add duplex if needed
-            if (printOptions.duplex) {
-              lpCommand += ` -o sides=two-sided-long-edge`;
-            }
-            
-            // Add page ranges if specified
-            if (printOptions.pages) {
-              lpCommand += ` -o page-ranges=${printOptions.pages}`;
-            }
-            
-            // Add color mode
-            if (printOptions.monochrome) {
-              lpCommand += ` -o ColorModel=Gray`;
-            }
-            
-            console.log(`Executing lp command: ${lpCommand}`);
-            
-            // Execute the print command
-            const lpResult = await new Promise((resolve) => {
-              exec(lpCommand, (error, stdout, stderr) => {
-                if (error) {
-                  console.error(`lp command error: ${error.message}`);
-                  resolve(false);
-                } else {
-                  if (stderr) console.error(`lp command stderr: ${stderr}`);
-                  console.log(`lp command stdout: ${stdout}`);
-                  resolve(true);
-                }
-              });
-            });
-            
-            printSuccess = lpResult;
-            if (printSuccess) {
-              console.log('Print job sent to printer via lp command successfully');
-            } else {
-              console.log('lp command did not succeed, trying alternative methods');
-            }
-          } catch (lpError) {
-            console.error('Error with lp command:', lpError);
-          }
-          
-          // Approach 2: Using lpr command if lp failed
-          if (!printSuccess) {
-            try {
-              console.log('Trying lpr command for printing...');
-              
-              // Build lpr command with options
-              let lprCommand = `lpr "${tempFilePath}"`;
-              
-              // Add copies if specified
-              if (printOptions.copies && printOptions.copies > 1) {
-                lprCommand += ` -#${printOptions.copies}`;
-              }
-              
-              // Add printer name if we can get it
-              const printerName = await new Promise((resolve) => {
-                exec('lpstat -d', (error, stdout) => {
-                  if (error) {
-                    resolve('');
-                  } else {
-                    const match = stdout.match(/system default destination: (.+)/);
-                    resolve(match ? match[1].trim() : '');
-                  }
-                });
-              });
-              
-              if (printerName) {
-                lprCommand += ` -P "${printerName}"`;
-              }
-              
-              await new Promise((resolve) => {
-                exec(lprCommand, (error, stdout, stderr) => {
-                  if (error) {
-                    console.error(`lpr command error: ${error.message}`);
-                    resolve(false);
-                  } else {
-                    if (stderr) console.error(`lpr command stderr: ${stderr}`);
-                    console.log(`lpr command stdout: ${stdout}`);
-                    console.log('Print job sent via lpr command');
-                    printSuccess = true;
-                    resolve(true);
-                  }
-                });
-              });
-            } catch (lprError) {
-              console.error('Error with lpr command:', lprError);
-            }
-          }
-          
-          // Approach 3: Open in Preview as last resort
-          if (!printSuccess) {
-            console.log('Trying open command with Preview...');
-            try {
-              const openCommand = `open -a "Preview" "${tempFilePath}"`;
-              
-              await new Promise((resolve) => {
-                exec(openCommand, (error, stdout, stderr) => {
-                  if (error) {
-                    console.error(`open command error: ${error.message}`);
-                  } else {
-                    if (stderr) console.error(`open command stderr: ${stderr}`);
-                    console.log(`open command stdout: ${stdout}`);
-                    console.log('PDF opened in Preview for manual printing');
-                    printSuccess = true;
-                  }
-                  resolve();
-                });
-              });
-            } catch (openError) {
-              console.error('Error with open command:', openError);
-            }
-          }
-          
-          // Wait a moment to ensure printing has started before cleaning up
-          await new Promise(resolve => setTimeout(resolve, 3000));
+
+    // Update job status
+    printJob.status = 'completed';
+    printJob.updatedAt = new Date();
+    await printJob.save();
+
+    // Delete the file after marking as completed
+    if (fs.existsSync(printJob.localFilePath)) {
+      fs.unlink(printJob.localFilePath, (err) => {
+        if (err) {
+          console.error('Error deleting file after completion:', err);
         } else {
-          // Use pdf-to-printer for Windows and other platforms
-          // Map our print options to pdf-to-printer options
-          const pdfToPrinterOptions = {};
-          
-          // Set printer name if available (leave default if not specified)
-          // pdfToPrinterOptions.printer = "Printer Name";
-          
-          // Set number of copies
-          if (printOptions.copies && printOptions.copies > 1) {
-            pdfToPrinterOptions.copies = printOptions.copies;
-          }
-          
-          // Set color/monochrome mode
-          if (printOptions.monochrome) {
-            pdfToPrinterOptions.monochrome = true;
-          } else {
-            pdfToPrinterOptions.color = true;
-          }
-          
-          // Set orientation
-          if (printOptions.landscape) {
-            pdfToPrinterOptions.landscape = true;
-          } else {
-            pdfToPrinterOptions.portrait = true;
-          }
-          
-          // Set duplex printing
-          if (printOptions.duplex) {
-            pdfToPrinterOptions.duplex = true;
-          }
-          
-          // Set page ranges if specified
-          if (printOptions.pages) {
-            pdfToPrinterOptions.pages = printOptions.pages;
-          }
-          
-          // Apply any additional options
-          if (printOptions.scale) {
-            pdfToPrinterOptions.scale = printOptions.scale;
-          }
-          
-          console.log('Printing with pdf-to-printer options:', pdfToPrinterOptions);
-          
-          await printer.print(tempFilePath, pdfToPrinterOptions);
-          console.log('Print job sent to printer via pdf-to-printer');
+          console.log('File deleted successfully after completion');
         }
-        
-        // Update user's points
-        user.points = Math.max(0, user.points - pointsToDeduct);
-        await user.save();
-        
-        // Update print job status
-        printJob.status = 'completed';
-        await printJob.save();
-        
-        // Delete the file from Cloudinary
-        try {
-          if (printJob.cloudinaryPublicId) {
-            await cloudinary.uploader.destroy(printJob.cloudinaryPublicId, { resource_type: 'raw' });
-          }
-        } catch (deleteError) {
-          console.error(`Error deleting file from Cloudinary: ${deleteError.message}`);
-          // Continue with the response even if file deletion fails
-        }
-        
-        // Send success response
-        const response = {
-          message: 'Print job sent to printer successfully',
-          printJob: {
-            id: printJob._id,
-            status: printJob.status,
-            pointsUsed: pointsToDeduct
-          },
-          user: {
-            id: user._id,
-            points: user.points
-          }
-        };
-        
-        // Clean up the temporary file after sending the response
-        setTimeout(() => {
-          fs.unlink(tempFilePath, (err) => {
-            if (err) console.error('Error deleting temp file:', err);
-            else console.log(`Temporary file deleted: ${tempFilePath}`);
-          });
-        }, 5000); // Wait 5 seconds before deleting
-        
-        return res.status(200).json(response);
-      } catch (printError) {
-        console.error('Error sending to printer:', printError);
-        
-        // Clean up the temporary file
-        fs.unlink(tempFilePath, (err) => {
-          if (err) console.error('Error deleting temp file:', err);
-        });
-        
-        return res.status(500).json({ 
-          message: 'Failed to print document. Printer error.', 
-          error: printError.message 
-        });
-      }
-    } catch (pdfError) {
-      console.error('Error fetching PDF for printing:', pdfError);
-      // Check if the error is a 404 (Not Found)
-      const statusCode = pdfError.response?.status;
-      if (statusCode === 404) {
-        return res.status(404).json({
-          message: 'PDF file not found in cloud storage. It may have been deleted or expired.',
-          error: pdfError.message
-        });
-      }
-      return res.status(500).json({ 
-        message: 'Failed to fetch PDF for printing', 
-        error: pdfError.message 
       });
     }
-  } catch (error) {
-    console.error('Error printing job:', error);
-    return res.status(500).json({ 
-      message: 'Failed to print job', 
-      error: error.message 
+
+    // Remove the print job from database
+    await PrintJob.findByIdAndDelete(jobId);
+
+    res.json({
+      success: true,
+      message: 'Print job marked as completed and file deleted'
     });
+
+  } catch (error) {
+    console.error('Error marking print job as completed:', error);
+    res.status(500).json({ message: 'Failed to mark print job as completed', error: error.message });
   }
-}; 
+};
+
+// Print job now (public endpoint for booth managers)
+exports.printJobNow = async (req, res) => {
+  try {
+    const { jobId } = req.params;
+    
+    // Find the print job
+    const printJob = await PrintJob.findById(jobId);
+    
+    if (!printJob) {
+      return res.status(404).json({ message: 'Print job not found' });
+    }
+
+    // Check if the file exists
+    if (!fs.existsSync(printJob.localFilePath)) {
+      return res.status(404).json({ message: 'PDF file not found' });
+    }
+
+    // Update print job status
+    printJob.status = 'processing';
+    await printJob.save();
+
+    try {
+      // Handle printing based on platform
+      if (process.platform === 'darwin') {
+        // macOS - use lpr command or open with Preview
+        const printCommand = `lpr -P "Default" "${printJob.localFilePath}"`;
+        
+        exec(printCommand, (error, stdout, stderr) => {
+          if (error) {
+            console.log('Direct print failed, opening in Preview:', error.message);
+            // Fallback: open in Preview for manual printing
+            exec(`open "${printJob.localFilePath}"`, (openError) => {
+              if (openError) {
+                console.error('Failed to open in Preview:', openError);
+              } else {
+                console.log('PDF opened in Preview for manual printing');
+              }
+            });
+          } else {
+            console.log('Print command executed successfully');
+          }
+        });
+      } else {
+        // Windows/Linux - use pdf-to-printer
+        await printer.print(printJob.localFilePath);
+        console.log('Print job sent to printer via pdf-to-printer');
+      }
+
+      // Update job status to completed
+      printJob.status = 'completed';
+      printJob.updatedAt = new Date();
+      await printJob.save();
+
+      // Delete the file after printing
+      if (fs.existsSync(printJob.localFilePath)) {
+        fs.unlink(printJob.localFilePath, (err) => {
+          if (err) {
+            console.error('Error deleting file after printing:', err);
+          } else {
+            console.log('File deleted successfully after printing');
+          }
+        });
+      }
+
+      // Remove the print job from database
+      await PrintJob.findByIdAndDelete(jobId);
+
+      res.json({
+        success: true,
+        message: 'Print job completed successfully and file deleted'
+      });
+
+    } catch (printError) {
+      console.error('Print execution error:', printError);
+      
+      // Update job status to failed
+      printJob.status = 'failed';
+      await printJob.save();
+
+      res.status(500).json({
+        success: false,
+        message: 'Failed to print PDF',
+        error: printError.message
+      });
+    }
+
+  } catch (error) {
+    console.error('Error in printJobNow:', error);
+    res.status(500).json({ message: 'Failed to process print request', error: error.message });
+  }
+};
+
+module.exports = exports;

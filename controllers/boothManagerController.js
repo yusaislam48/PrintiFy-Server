@@ -278,7 +278,7 @@ exports.updatePaperCount = async (req, res) => {
         boothLocation: updatedBoothManager.boothLocation,
         boothNumber: updatedBoothManager.boothNumber,
         paperCapacity: updatedBoothManager.paperCapacity,
-        loadedPaper: updatedBoothManager.loadedPaper,
+      loadedPaper: updatedBoothManager.loadedPaper,
         printerName: updatedBoothManager.printerName,
         printerModel: updatedBoothManager.printerModel,
         isActive: updatedBoothManager.isActive,

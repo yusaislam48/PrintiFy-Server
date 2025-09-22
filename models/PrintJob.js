@@ -18,9 +18,18 @@ const printJobSchema = new mongoose.Schema({
     type: String,
     required: true
   },
-  cloudinaryPublicId: {
+  localFilePath: {
     type: String,
     required: true
+  },
+  fileSize: {
+    type: Number,
+    required: true
+  },
+  deleteAfter: {
+    type: Date,
+    required: true,
+    index: { expireAfterSeconds: 0 }
   },
   pointsUsed: {
     type: Number,

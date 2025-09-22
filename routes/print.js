@@ -10,6 +10,10 @@ router.post('/public/jobs/:jobId/complete', printController.markPrintJobAsComple
 router.get('/public/view/:jobId', printController.viewPublicPDF);
 router.post('/public/jobs/:jobId/print-now', printController.printJobNow);
 
+// File serving routes - no authentication required for viewing
+router.get('/files/pdf/:year/:month/:day/:filename', printController.viewPDF);
+router.get('/files/download/:year/:month/:day/:filename', printController.downloadPDF);
+
 // All routes below this line require authentication
 router.use(protect);
 
@@ -25,7 +29,13 @@ router.get('/jobs/:jobId', printController.getPrintJob);
 // Cancel a print job
 router.post('/jobs/:jobId/cancel', printController.cancelPrintJob);
 
-// Download a PDF file directly
+// Print a PDF job
+router.post('/jobs/:jobId/print', printController.printPDF);
+
+// Delete a print job
+router.delete('/jobs/:jobId', printController.deletePrintJob);
+
+// Download a PDF file directly (legacy support)
 router.get('/download/:jobId', printController.downloadPDF);
 
 module.exports = router; 

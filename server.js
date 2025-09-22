@@ -8,7 +8,7 @@ const userRoutes = require('./routes/user');
 const printRoutes = require('./routes/print');
 const adminRoutes = require('./routes/admin');
 const boothManagerRoutes = require('./routes/boothManager');
-const { cloudinary } = require('./config/cloudinary');
+const { cleanupExpiredFiles } = require('./controllers/printController');
 const axios = require('axios');
 
 // Load environment variables
@@ -77,109 +77,6 @@ app.use('/api/print', printRoutes);
 app.use('/api/admin', adminRoutes);
 app.use('/api/booth-managers', boothManagerRoutes);
 
-// PDF Proxy route - handles /pdf-proxy/* requests
-app.get('/pdf-proxy/:cloud_name/raw/upload/:file_path', async (req, res) => {
-  try {
-    const { cloud_name, file_path } = req.params;
-    const isDownload = req.query.download === 'true';
-    
-    console.log(`PDF Proxy request: cloud_name=${cloud_name}, file_path=${file_path}, download=${isDownload}`);
-    
-    if (!cloud_name || !file_path) {
-      console.error('Missing parameters in PDF proxy request');
-      return res.status(400).json({ message: 'Missing parameters' });
-    }
-    
-    // Construct a cloudinary URL for viewing
-    const rawFilePath = file_path.endsWith('.pdf.pdf') 
-      ? file_path.replace(/\.pdf\.pdf$/, '.pdf')  // Fix double extension
-      : file_path;
-
-    const publicId = `printify/pdfs/${rawFilePath.replace(/\.pdf$/, '')}`;
-    console.log(`Constructed public ID: ${publicId}`);
-    
-    // Create URL options for better PDF accessibility
-    const viewOptions = {
-      resource_type: 'raw',
-      type: 'upload',
-      flags: isDownload ? 'attachment' : 'attachment:false',  // Force download if requested
-      disposition: isDownload ? 'attachment' : 'inline',      // Display in browser or download
-      secure: true,
-    };
-    
-    // Make sure the public ID has the correct extension
-    const finalPublicId = publicId.endsWith('.pdf') ? publicId : `${publicId}.pdf`;
-    const pdfUrl = cloudinary.url(finalPublicId, viewOptions);
-    console.log(`Generated Cloudinary URL: ${pdfUrl}`);
-    
-    try {
-      // First check if the PDF exists with a HEAD request
-      await axios({
-        url: pdfUrl,
-        method: 'HEAD',
-        timeout: 5000
-      });
-      
-      // Fetch and stream the PDF from Cloudinary
-      const response = await axios({
-        url: pdfUrl,
-        method: 'GET',
-        responseType: 'stream',
-        timeout: 15000 // 15 second timeout
-      });
-      
-      // Set appropriate headers
-      res.setHeader('Content-Type', 'application/pdf');
-      
-      // Set content disposition based on download flag
-      if (isDownload) {
-        const fileName = file_path.split('_').slice(1).join('_');
-        res.setHeader('Content-Disposition', `attachment; filename="${fileName || 'document.pdf'}"`);
-      } else {
-        res.setHeader('Content-Disposition', 'inline');
-      }
-      
-      // Add CORS headers to avoid browser restrictions
-      const origin = req.headers.origin;
-      if (origin && allowedOrigins.includes(origin)) {
-        res.setHeader('Access-Control-Allow-Origin', origin);
-      } else {
-        res.setHeader('Access-Control-Allow-Origin', 'https://printi-fy-client.vercel.app');
-      }
-      res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
-      res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
-      res.setHeader('Access-Control-Allow-Credentials', 'true');
-      
-      // Log success
-      console.log(`Successfully streaming PDF: ${publicId}`);
-      
-      // Pipe the PDF data directly to the response
-      response.data.pipe(res);
-    } catch (fetchError) {
-      console.error('Failed to fetch PDF from Cloudinary:', fetchError.message);
-      
-      if (fetchError.response) {
-        const statusCode = fetchError.response.status;
-        console.error(`Cloudinary returned status code: ${statusCode}`);
-        
-        if (statusCode === 404) {
-          return res.status(404).json({ message: 'PDF file not found in cloud storage' });
-        }
-      }
-      
-      return res.status(500).json({ 
-        message: 'Error fetching PDF from cloud storage',
-        error: fetchError.message
-      });
-    }
-  } catch (error) {
-    console.error('PDF proxy general error:', error);
-    res.status(500).json({ 
-      message: 'Error processing PDF request',
-      error: error.message
-    });
-  }
-});
 
 // Home route
 app.get('/', (req, res) => {
@@ -247,10 +144,21 @@ app.use((err, req, res, next) => {
   res.status(500).send({ message: 'Something went wrong!', error: err.message });
 });
 
+// Setup automatic file cleanup - runs every hour
+const cleanupInterval = setInterval(() => {
+  console.log('Running scheduled file cleanup...');
+  cleanupExpiredFiles();
+}, 60 * 60 * 1000); // 1 hour in milliseconds
+
+// Cleanup on server startup
+console.log('Running initial file cleanup...');
+cleanupExpiredFiles();
+
 // Start server
-const PORT = process.env.PORT || 5000;
+const PORT = process.env.PORT || 8080;
 app.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
+  console.log('Automatic file cleanup scheduled every hour');
   
   // Create initial admin account
   createInitialAdmin();
