@@ -186,31 +186,16 @@ app.use('/api/print', printRoutes);
 app.use('/api/admin', adminRoutes);
 app.use('/api/booth-managers', boothManagerRoutes);
 
-// Error handling middleware (must be after routes)
-app.use(notFoundHandler);
-app.use(secureErrorHandler);
-
-// Home route
+// Home route (must be before error handlers)
 app.get('/', (req, res) => {
   res.send('PrintiFy API is running');
 });
 
-// CORS test page
-app.get('/cors-test', (req, res) => {
-  const fs = require('fs');
-  const path = require('path');
-  
-  try {
-    const filePath = path.join(__dirname, 'cors-test.html');
-    const content = fs.readFileSync(filePath, 'utf8');
-    
-    res.setHeader('Content-Type', 'text/html');
-    res.send(content);
-  } catch (error) {
-    console.error('Error serving CORS test page:', error);
-    res.status(500).send('Error loading CORS test page');
-  }
-});
+// Error handling middleware (must be after routes)
+app.use(notFoundHandler);
+app.use(secureErrorHandler);
+
+
 
 // Create initial master admin account if it doesn't exist
 const createInitialAdmin = async () => {
