@@ -109,21 +109,38 @@ app.use(customMongoSanitize({
   logAttempts: true
 }));
 
-// Rate limiting configuration
+// Dynamic rate limiting configuration for clustered environment
+const os = require('os');
+const numCPUs = os.cpus().length;
+const workerCount = process.env.WORKER_COUNT ? parseInt(process.env.WORKER_COUNT) : Math.min(2, numCPUs);
+
+// Scale rate limits based on cluster size for optimal VPS utilization
+const baseRateLimit = 100;
+const clusterMultiplier = Math.max(1, workerCount);
+const dynamicRateLimit = Math.floor(baseRateLimit * clusterMultiplier);
+
+console.log(`⚡ Rate Limiting Configuration:`);
+console.log(`   └─ Workers: ${workerCount}`);
+console.log(`   └─ Rate Limit: ${dynamicRateLimit} requests/15min per IP`);
+
 const generalLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 100, // Limit each IP to 100 requests per windowMs
+  max: dynamicRateLimit, // Dynamic limit based on cluster size
   message: {
     error: 'Too many requests from this IP, please try again later.',
-    retryAfter: '15 minutes'
+    retryAfter: '15 minutes',
+    limit: dynamicRateLimit,
+    workers: workerCount
   },
   standardHeaders: true, // Return rate limit info in the `RateLimitInfo` headers
   legacyHeaders: false, // Disable the `X-RateLimit-*` headers
   handler: (req, res) => {
-    console.warn(`🚨 Rate Limit Exceeded: ${req.ip} - ${req.method} ${req.originalUrl}`);
+    console.warn(`🚨 Rate Limit Exceeded: ${req.ip} - ${req.method} ${req.originalUrl} (Limit: ${dynamicRateLimit})`);
     res.status(429).json({
       error: 'Too many requests from this IP, please try again later.',
-      retryAfter: '15 minutes'
+      retryAfter: '15 minutes',
+      limit: dynamicRateLimit,
+      workers: workerCount
     });
   }
 });
