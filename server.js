@@ -1,18 +1,27 @@
 // Test comment for pushing to the server repository - Updated
+const dotenv = require('dotenv');
+
+// Load environment variables FIRST before any other imports
+dotenv.config();
+
 const express = require('express');
 const cors = require('cors');
-const dotenv = require('dotenv');
+const helmet = require('helmet');
+const rateLimit = require('express-rate-limit');
+const slowDown = require('express-slow-down');
+const mongoSanitize = require('express-mongo-sanitize');
+const hpp = require('hpp');
+const compression = require('compression');
 const connectDB = require('./config/db');
 const authRoutes = require('./routes/auth');
 const userRoutes = require('./routes/user');
 const printRoutes = require('./routes/print');
 const adminRoutes = require('./routes/admin');
 const boothManagerRoutes = require('./routes/boothManager');
+const { secureErrorHandler, notFoundHandler } = require('./middleware/errorHandler');
 const { cleanupExpiredFiles } = require('./controllers/printController');
+const customMongoSanitize = require('./middleware/mongoSanitize');
 const axios = require('axios');
-
-// Load environment variables
-dotenv.config();
 
 // Connect to MongoDB
 connectDB();
@@ -20,49 +29,132 @@ connectDB();
 // Create Express app
 const app = express();
 
-// CORS configuration - explicitly list all allowed origins
+// Security Headers with Helmet.js
+app.use(helmet({
+  contentSecurityPolicy: {
+    directives: {
+      defaultSrc: ["'self'"],
+      styleSrc: ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com"],
+      fontSrc: ["'self'", "https://fonts.gstatic.com"],
+      scriptSrc: ["'self'"],
+      imgSrc: ["'self'", "data:", "https:", "http:"],
+      connectSrc: ["'self'", "https://api.cloudinary.com"],
+      uploadSrc: ["'self'"],
+    },
+  },
+  crossOriginEmbedderPolicy: false, // Disable for file uploads
+  hsts: {
+    maxAge: 31536000, // 1 year
+    includeSubDomains: true,
+    preload: true
+  }
+}));
+
+// Response compression
+app.use(compression());
+
+// HTTP Parameter Pollution protection  
+app.use(hpp({
+  whitelist: ['tags', 'categories'], // Allow arrays for specific fields
+  checkBody: false, // Don't check body parameters to avoid conflicts
+  checkQuery: true   // Only check query parameters
+}));
+
+// Secure CORS configuration - explicitly list all allowed origins
 const allowedOrigins = [
   'http://localhost:3000',
-  'http://localhost:5173', 
-  'https://printi-fy-client.vercel.app',
-  'https://printify-server-production.up.railway.app'
+  'http://localhost:5173',
+  'http://127.0.0.1:5173',
+  'http://127.0.0.1:3000',
+  ...(process.env.NODE_ENV === 'production' ? [
+    'https://printi-fy-client.vercel.app',
+    'https://printify-server-production.up.railway.app'
+  ] : [])
 ];
 
+// Security: Log and block unauthorized origins
 app.use(cors({
   origin: function(origin, callback) {
-    // Allow requests with no origin (like mobile apps, curl requests)
-    if (!origin) return callback(null, true);
+    // Allow requests with no origin only in development (like Postman, curl)
+    if (!origin && process.env.NODE_ENV !== 'production') {
+      return callback(null, true);
+    }
     
-    if (allowedOrigins.indexOf(origin) !== -1) {
+    if (allowedOrigins.includes(origin)) {
       callback(null, true);
     } else {
-      console.log('CORS blocked origin:', origin);
-      // Still allow the request to go through for development/debugging
-      callback(null, true);
+      console.warn(`🚫 CORS BLOCKED: Unauthorized origin attempted access: ${origin}`);
+      callback(new Error(`CORS policy violation: Origin ${origin} is not allowed`));
     }
   },
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization']
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With'],
+  exposedHeaders: ['X-Total-Count'], // For pagination
+  maxAge: 86400, // Cache preflight for 24 hours
+  optionsSuccessStatus: 200 // For legacy browser support
 }));
 
-// Add CORS headers to all responses
-app.use((req, res, next) => {
-  const origin = req.headers.origin;
-  // Instead of wildcard '*', use the actual origin if it's allowed
-  if (origin && allowedOrigins.includes(origin)) {
-    res.header('Access-Control-Allow-Origin', origin);
-  } else {
-    res.header('Access-Control-Allow-Origin', 'https://printi-fy-client.vercel.app');
+// Security middleware for request body size limits
+app.use(express.json({ limit: '10mb' })); // Limit JSON payload size
+app.use(express.urlencoded({ 
+  extended: true, 
+  limit: '10mb',
+  parameterLimit: 1000 // Limit number of parameters
+}));
+
+// Custom MongoDB injection protection (safe implementation)
+app.use(customMongoSanitize({
+  replaceWith: '_',
+  logAttempts: true
+}));
+
+// Rate limiting configuration
+const generalLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 100, // Limit each IP to 100 requests per windowMs
+  message: {
+    error: 'Too many requests from this IP, please try again later.',
+    retryAfter: '15 minutes'
+  },
+  standardHeaders: true, // Return rate limit info in the `RateLimitInfo` headers
+  legacyHeaders: false, // Disable the `X-RateLimit-*` headers
+  handler: (req, res) => {
+    console.warn(`🚨 Rate Limit Exceeded: ${req.ip} - ${req.method} ${req.originalUrl}`);
+    res.status(429).json({
+      error: 'Too many requests from this IP, please try again later.',
+      retryAfter: '15 minutes'
+    });
   }
-  res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
-  res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization');
-  res.header('Access-Control-Allow-Credentials', 'true');
-  next();
 });
 
-app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
+// Strict rate limiting for auth endpoints
+const authLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 5, // Limit each IP to 5 login attempts per windowMs
+  message: {
+    error: 'Too many authentication attempts, please try again later.',
+    retryAfter: '15 minutes'
+  },
+  standardHeaders: true,
+  legacyHeaders: false,
+  skipSuccessfulRequests: true // Don't count successful requests
+});
+
+// Progressive delay for repeated requests
+const speedLimiter = slowDown({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  delayAfter: 50, // Allow 50 requests per windowMs without delay
+  delayMs: () => 500, // Add 500ms delay per request after delayAfter
+  validate: { delayMs: false } // Disable warning
+});
+
+// Apply rate limiting
+app.use('/api/auth/login', authLimiter);
+app.use('/api/auth/register', authLimiter);
+app.use('/api/auth/verify', authLimiter);
+app.use(generalLimiter);
+app.use(speedLimiter);
 
 // Request logging middleware
 app.use((req, res, next) => {
@@ -77,6 +169,9 @@ app.use('/api/print', printRoutes);
 app.use('/api/admin', adminRoutes);
 app.use('/api/booth-managers', boothManagerRoutes);
 
+// Error handling middleware (must be after routes)
+app.use(notFoundHandler);
+app.use(secureErrorHandler);
 
 // Home route
 app.get('/', (req, res) => {

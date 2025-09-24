@@ -8,15 +8,8 @@ const connectDB = async () => {
     // Add debug logging
     console.log(`Attempting to connect to MongoDB with URI type: ${mongoURI ? (mongoURI.includes('mongodb+srv') ? 'Atlas URI' : 'Local URI') : 'No URI found'}`);
     
-    // MongoDB connection options
-    const options = {
-      // These options are no longer needed in newer MongoDB driver versions
-      // but added for compatibility
-      useNewUrlParser: true,
-      useUnifiedTopology: true,
-    };
-    
-    const conn = await mongoose.connect(mongoURI, options);
+    // MongoDB connection with modern driver (no deprecated options needed)
+    const conn = await mongoose.connect(mongoURI);
     
     console.log(`MongoDB Connected: ${conn.connection.host}`);
   } catch (error) {
